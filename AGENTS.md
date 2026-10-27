@@ -8,6 +8,7 @@ Read [README.md](README.md) for setup, [docs/PROJECT_STRUCTURE.md](docs/PROJECT_
 
 - [docs/SITES.md](docs/SITES.md): hosting, staging, secrets and deployment.
 - [docs/MCP.md](docs/MCP.md): the chat-facing material tools.
+- [docs/PRACTICE.md](docs/PRACTICE.md): user-facing practice goals, flows and scheduling rules. Keep it aligned with behavior changes.
 - [SECURITY.md](SECURITY.md): authentication and private data boundaries.
 
 ## Architecture

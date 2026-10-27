@@ -132,6 +132,8 @@ Files immediately inside `lib/` mainly describe algorithms, types, browser utili
 - [sentences.ts](../lib/sentences.ts) defines sentence sessions, event transitions, normalization and local reconciliation. [server/sentences.ts](../lib/server/sentences.ts) selects eligible translated text segments/saved phrases and persists revisions.
 - [practice-mode.ts](../lib/practice-mode.ts), [practice-input.ts](../lib/practice-input.ts) and [practice.ts](../lib/practice.ts) contain mode selection, answer/input helpers and the simpler review queue logic.
 
+For the user-facing explanation of practice goals, modes, learning stages, intervals and feedback, see [Practice guide](PRACTICE.md).
+
 ### Text reading and audio
 
 - [text-segments.ts](../lib/text-segments.ts) splits text into reading segments. [text-audio.ts](../lib/text-audio.ts) groups segments and calculates sentence ranges. [text-preparation.ts](../lib/text-preparation.ts) derives preparation progress.

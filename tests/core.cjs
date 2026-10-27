@@ -2295,18 +2295,74 @@ console.log(
   assert.equal(daily.session.units.length, 3);
   let dj = { base: daily, events: [] };
   for (let i = 0; i < 3; i++) dj = journalCore.journalAppend(dj, 'continue', '', 0);
-  assert.equal(journalCore.journalView(dj).session.closed, true);
+  assert.equal(journalCore.journalView(dj).session.closed, false);
+  assert.equal(journalCore.journalView(dj).session.turn, 0);
+  assert.equal(daily.session.introPractice, true);
+  const introBatch = journalCore.journalBatch(dj);
+  daily = await wordsService.commitWords(dailyOwner, introBatch);
+  const introStatus = await wordsService.getWords(dailyOwner);
+  assert.equal(introStatus.newCount, 0);
+  assert.equal(introStatus.waitingNew, 17);
+  assert.equal(introStatus.due, 3);
+  assert.equal((await wordsService.startWords(dailyOwner)).session.id, daily.session.id);
+  assert.ok(
+    daily.session.units.every(
+      (u) =>
+        u.state.due === dailyDate &&
+        u.state.lastSeenDay === undefined &&
+        u.state.interval === -1 &&
+        u.state.introducedDay === dailyDate,
+    ),
+  );
+  assert.equal((await wordsService.commitWords(dailyOwner, introBatch)).duplicate, true);
+  assert.equal((await wordsService.getWords(dailyOwner)).newCount, 0);
+  const introBackup = await backupService.exportBackup(dailyOwner);
+  const introPlan = await backupService.previewBackup('intro-import', introBackup);
+  await backupService.importBackup('intro-import', introBackup, introPlan.token);
+  const restoredIntro = await wordsService.getWords('intro-import');
+  assert.equal(restoredIntro.session.introPractice, true);
+  assert.equal(restoredIntro.session.turn, 0);
+  assert.equal(restoredIntro.session.units.filter((u) => u.introDelay !== undefined).length, 3);
+  let restoredIntroJournal = { base: restoredIntro, events: [] };
+  while (!journalCore.journalView(restoredIntroJournal).session.closed) {
+    const current = journalCore.journalView(restoredIntroJournal).session,
+      question = current.question,
+      unit = current.units.find((u) => u.id === question.unitId);
+    restoredIntroJournal = journalCore.journalAppend(
+      restoredIntroJournal,
+      current.feedback ? 'next' : 'answer',
+      question.kind === 'self' ? 'yes' : question.direction === 'nl-en' ? unit.en : unit.nl,
+      0,
+    );
+  }
+  const assessedIntro = await wordsService.commitWords(
+    'intro-import',
+    journalCore.journalBatch(restoredIntroJournal),
+  );
+  assert.equal(assessedIntro.session.turn, 3);
+  assert.ok(
+    assessedIntro.session.units.every(
+      (u) =>
+        u.attempts === 1 &&
+        u.done &&
+        u.state.stage === 'build' &&
+        u.state.lastSeenDay === dailyDate &&
+        u.state.introducedDay === dailyDate &&
+        u.state.due === wordsCore.addDays(dailyDate, 3),
+    ),
+  );
+  // Ending after introductions keeps these cards available today, even with no new allowance.
+  dj = journalCore.journalAppend({ base: daily, events: [] }, 'finish', '', 0);
   daily = await wordsService.commitWords(dailyOwner, journalCore.journalBatch(dj));
   assert.equal(daily.newCount, 0);
-  assert.equal(daily.waitingNew, 17);
-  assert.equal(daily.due, 0);
-  assert.equal((await wordsService.getWords(dailyOwner)).session, null);
-  await assert.rejects(() => wordsService.startWords(dailyOwner), /Nothing is due/);
+  assert.equal(daily.due, 3);
+  daily = await wordsService.startWords(dailyOwner);
+  assert.equal(daily.session.units.length, 3);
+  assert.notEqual(daily.session.question.kind, 'intro');
+  dj = journalCore.journalAppend({ base: daily, events: [] }, 'finish', '', 0);
+  await wordsService.commitWords(dailyOwner, journalCore.journalBatch(dj));
   const dailyRows = await materials.listMaterials(dailyOwner, '', false, true, 'phrase', true);
-  assert.equal(
-    dailyRows.filter((m) => m.learning.due === wordsCore.addDays(dailyDate, 1)).length,
-    3,
-  );
+  assert.equal(dailyRows.filter((m) => m.learning.due === dailyDate).length, 3);
   assert.equal(dailyRows.filter((m) => m.learning.label === 'Recognize').length, 3);
   // Simulate the next date for these cards without altering the process clock or real user data.
   for (const row of sqlite
@@ -2515,8 +2571,17 @@ console.log(
   assert.equal(sizeFour.session.cardLimit, 4);
   assert.equal(sizeFour.session.units.length, 4);
   let fourJournal = { base: sizeFour, events: [] };
-  for (let i = 0; i < 4; i++)
-    fourJournal = journalCore.journalAppend(fourJournal, 'continue', '', 0);
+  for (let guard = 0; !journalCore.journalView(fourJournal).session.closed && guard < 30; guard++) {
+    const current = journalCore.journalView(fourJournal).session,
+      question = current.question,
+      unit = current.units.find((u) => u.id === question.unitId);
+    fourJournal = journalCore.journalAppend(
+      fourJournal,
+      current.feedback ? 'next' : question.kind === 'intro' ? 'continue' : 'answer',
+      question.kind === 'self' ? 'yes' : question.direction === 'nl-en' ? unit.en : unit.nl,
+      0,
+    );
+  }
   assert.equal(journalCore.journalView(fourJournal).session.turn, 4);
   assert.equal(journalCore.journalView(fourJournal).session.closed, true);
   assert.equal(wordsCore.wordSessionSchema.safeParse(sizeDefault.session).success, true);

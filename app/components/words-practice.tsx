@@ -683,14 +683,13 @@ export default function WordsPractice({
                 Continue <ArrowRight size={17} />
               </button>
             )}
-            {daily && <p className="words-next-review">Next review: 1d</p>}
             {daily && !feedback && (
               <button
                 className="text-action words-known"
                 disabled={validating || busy || conflict}
                 onClick={() => void send('known')}
               >
-                Already know — test me
+                Already know
               </button>
             )}
           </>

@@ -15,6 +15,8 @@ Collect Dutch words and texts, listen to recordings, and practise the material y
 - ElevenLabs pronunciation and connected text recordings with sentence highlighting.
 - Four MCP tools: list, read, add and update material.
 
+Learn how to choose a mode, use hints and understand review intervals in the [Practice guide](docs/PRACTICE.md).
+
 ## Requirements
 
 Use Node.js 24 and pnpm 11.25.0. ChatGPT Sites hosts the server, database (D1), files (R2), and account authentication. Each installation is independent.

@@ -154,6 +154,7 @@ export async function startWords(user: string, timeZone = 'Europe/Amsterdam') {
     throw new AppError('Nothing is due. Add translated words to practice, or come back tomorrow.');
   const session: WordSession = {
     algorithm: 2,
+    introPractice: true,
     preferences: status.preferences,
     choicePool: status.units
       .slice(0, 100)

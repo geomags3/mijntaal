@@ -203,6 +203,139 @@ assert.equal(
   JSON.stringify(journal.restoreJournal(JSON.stringify(acknowledged))),
   JSON.stringify(acknowledged),
 );
+// New rounds separate introduction from the first assessed encounter.
+function introRound(limit = 1, count = 1) {
+  const value = session();
+  value.introPractice = true;
+  value.cardLimit = limit;
+  value.units = units().slice(0, count);
+  value.question = null;
+  core.nextWordQuestion(value);
+  return value;
+}
+s = introRound();
+const originalQuestion = s.question.id,
+  originalState = structuredClone(s.units[0].state);
+s = act(s, 'continue');
+assert.equal(s.closed, false);
+assert.equal(s.turn, 0, 'an introduction does not use an exercise slot');
+assert.equal(s.units[0].attempts, 0);
+assert.equal(s.units[0].done, false);
+assert.equal(s.units[0].state.stage, 'recognize');
+assert.equal(s.units[0].state.introducedDay, day);
+for (const key of ['due', 'interval', 'intervalDays', 'lastSeenDay', 'lastSuccessDay'])
+  assert.equal(s.units[0].state[key], originalState[key], `${key} is unchanged by introduction`);
+assert.notEqual(s.question.id, originalQuestion);
+assert.equal(s.question.unitId, 'u0', 'a lone new word immediately gets its exercise');
+assert.equal(s.question.kind, 'choice');
+assert.equal(core.wordSessionSchema.safeParse(s).success, true);
+s = answer(s);
+assert.equal(s.turn, 1);
+assert.equal(s.correct, 1);
+assert.equal(s.units[0].done, true);
+assert.equal(s.units[0].state.due, core.addDays(day, 3));
+assert.equal(s.units[0].state.lastSeenDay, day);
+assert.equal(s.units[0].state.introducedDay, day);
+assert.equal(s.units[0].introDelay, undefined);
+assert.equal(act(s, 'next').closed, true);
+s = act(introRound(), 'continue');
+s = act(
+  s,
+  'answer',
+  s.question.options.find((option) => option !== s.units[0].en),
+);
+assert.equal(s.units[0].state.due, core.addDays(day, 1));
+assert.equal(s.units[0].state.lastSeenDay, day);
+assert.equal(s.units[0].state.lastSuccessDay, null);
+assert.equal(s.turn, 1);
+// Preserve an existing due date/interval even if an imported intro state has them.
+s = introRound();
+s.units[0].state.due = core.addDays(day, -4);
+s.units[0].state.interval = 2;
+s.units[0].state.intervalDays = 7;
+s = act(s, 'continue');
+assert.equal(s.units[0].state.due, core.addDays(day, -4));
+assert.equal(s.units[0].state.interval, 2);
+assert.equal(s.units[0].state.intervalDays, 7);
+// Two intervening cards provide spacing; interaction with a hint/mode is not another card.
+s = introRound(3, 3);
+for (const u of s.units.slice(1)) {
+  u.state.stage = 'review';
+  u.state.intervalDays = 7;
+}
+s = act(s, 'continue');
+assert.equal(s.question.unitId, 'u1');
+s = act(s, 'mode', 'choices');
+assert.equal(s.units[0].introDelay, 2);
+s = answer(s);
+s = act(s, 'next');
+assert.equal(s.question.unitId, 'u2');
+s = answer(s);
+s = act(s, 'next');
+assert.equal(s.question.unitId, 'u0');
+assert.notEqual(s.question.kind, 'intro');
+assert.equal(s.turn, 2);
+s = answer(s);
+assert.equal(act(s, 'next').closed, true);
+// Every selected new word receives an exercise, including the final available slot.
+s = introRound(3, 3);
+const presentations = [],
+  questionIds = new Set();
+for (let guard = 0; !s.closed && guard < 20; guard++) {
+  if (s.feedback) {
+    s = act(s, 'next');
+    continue;
+  }
+  assert.equal(questionIds.has(s.question.id), false);
+  questionIds.add(s.question.id);
+  presentations.push(s.question.kind);
+  s = answer(s);
+}
+assert.equal(s.closed, true);
+assert.equal(s.turn, 3);
+assert.equal(presentations.filter((kind) => kind === 'intro').length, 3);
+assert.equal(presentations.filter((kind) => kind !== 'intro').length, 3);
+assert.ok(s.units.every((u) => u.done && u.attempts === 1));
+// An optional mistake retry must not consume the last slot before a newly introduced card.
+s = introRound(5, 5);
+for (const u of s.units.slice(0, 4)) {
+  u.state.stage = 'review';
+  u.state.intervalDays = 7;
+}
+s.question = null;
+core.nextWordQuestion(s);
+s = act(act(s, 'answer', 'wrong'), 'next');
+for (let i = 0; i < 3; i++) s = act(answer(s), 'next');
+assert.equal(s.question.kind, 'intro');
+s = act(s, 'continue');
+assert.equal(s.turn, 4);
+assert.equal(s.question.unitId, 'u4');
+assert.notEqual(s.question.kind, 'intro');
+s = act(answer(s), 'next');
+assert.equal(s.closed, true);
+assert.equal(s.units[4].done, true);
+// Introduction delays survive local recovery and prefix acknowledgements without replay drift.
+let introJournal = { base: { session: introRound(3, 3), revision: 1 }, events: [] };
+introJournal = journal.journalAppend(introJournal, 'continue', '', 0);
+const introSent = structuredClone(introJournal);
+introJournal = journal.journalAppend(introJournal, 'continue', '', 0);
+const introAck = journal.journalAck(introJournal, introSent, {
+  session: journal.journalView(introSent).session,
+  revision: 2,
+});
+assert.equal(
+  JSON.stringify(journal.journalView(journal.restoreJournal(JSON.stringify(introAck)))),
+  JSON.stringify(journal.journalView(introJournal)),
+);
+let legacyJournal = { base: { session: session(), revision: 1 }, events: [] };
+legacyJournal = journal.journalAppend(legacyJournal, 'continue', '', 0);
+assert.equal(
+  journal.journalView(journal.restoreJournal(JSON.stringify(legacyJournal))).session.closed,
+  true,
+);
+console.log(
+  'PASS: introductions preserve scheduling and exercise budget, return after intervening cards or immediately alone, cover the last slot, and retain new/legacy journal replay.',
+);
 for (const [due, label] of [
   ['2026-10-25', 'Today'],
   ['2026-10-26', 'Today'],

@@ -35,6 +35,7 @@ export const wordUnitSchema = z
     done: z.boolean(),
     skipped: z.boolean(),
     retryPending: z.boolean().optional(),
+    introDelay: z.number().int().min(0).max(2).optional(),
   })
   .strict();
 export const wordQuestionSchema = z
@@ -93,6 +94,8 @@ export const wordSessionSchema = z
     wrong: z.number().int().min(0),
     supported: z.number().int().min(0),
     algorithm: z.literal(2).optional(),
+    // Opt in per session so previously saved journals keep their original transitions.
+    introPractice: z.literal(true).optional(),
     preferences: wordPreferencesSchema.optional(),
     choicePool: z.array(distractorSchema).max(100).optional(),
   })
@@ -443,7 +446,8 @@ function setDays(state: WordState, today: string, days: number) {
   );
 }
 function dailyQuestion(session: WordSession, u: WordUnit, mode?: string): WordQuestion {
-  const seed = session.id + ':' + session.turn + ':' + u.id;
+  const seed =
+    session.id + ':' + session.turn + ':' + u.id + (u.introDelay !== undefined ? ':practice' : '');
   let kind: WordQuestion['kind'] = 'typing',
     direction: WordQuestion['direction'] = 'en-nl';
   let options: string[] = [],
@@ -493,11 +497,21 @@ function nextDailyQuestion(s: WordSession) {
     s.closed = true;
     return;
   }
+  const introductions = s.units.filter((u) => !u.done && u.introDelay !== undefined);
   const u =
-    s.units.find((u) => !u.done && !u.retryPending) ||
+    introductions.find((u) => u.introDelay === 0) ||
+    s.units.find((u) => !u.done && !u.retryPending && u.introDelay === undefined) ||
+    introductions.sort((a, b) => a.introDelay! - b.introDelay!)[0] ||
     s.units.find((u) => !u.done && u.retryPending && u.availableAt <= s.turn);
   s.question = u ? dailyQuestion(s, u) : null;
   if (!u) s.closed = true;
+}
+// Count other card presentations, not hints/mode changes, before the first exercise.
+function advanceIntroductions(s: WordSession, current: WordUnit) {
+  for (const u of s.units) {
+    if (u.id !== current.id && u.introDelay !== undefined)
+      u.introDelay = Math.max(0, u.introDelay - 1);
+  }
 }
 function finishEncounter(s: WordSession, u: WordUnit, days: number) {
   setDays(u.state, s.day, days);
@@ -585,7 +599,18 @@ function applyDailyAction(
     if (introducing) u.state.introducedDay ??= s.day;
     finishEncounter(s, u, 1);
     u.skipped = true;
+    delete u.introDelay;
     s.turn++;
+    advanceIntroductions(s, u);
+    nextDailyQuestion(s);
+    return s;
+  }
+  if (s.introPractice && action === 'continue' && q.kind === 'intro') {
+    // An introduction is persisted, but is neither an answer nor a scheduled review.
+    u.state.stage = 'recognize';
+    u.state.introducedDay ??= s.day;
+    advanceIntroductions(s, u);
+    u.introDelay = 2;
     nextDailyQuestion(s);
     return s;
   }
@@ -608,6 +633,8 @@ function applyDailyAction(
   u.attempts++;
   u.state.lastSeenDay = s.day;
   if (introducing) u.state.introducedDay ??= s.day;
+  delete u.introDelay;
+  advanceIntroductions(s, u);
   let outcome: 'seen' | 'correct' | 'supported' | 'wrong' = 'wrong';
   if (correct) {
     if (q.kind === 'intro') {

@@ -184,3 +184,55 @@ assert.equal(
 console.log(
   'PASS: actual Words card switches Choices / Letters / Type, submits typed answer through local journal, retains revealed assistance and shows next review without a server check.',
 );
+
+// The introduction has no scheduling claim; Continue advances to an exercise locally.
+function renderIntroduction() {
+  const intro = words.makeUnit(
+    { id: 'intro', title: 'de ochtend', body: { en: 'morning' } },
+    words.initialWordState('intro-content', day),
+  );
+  result.session = {
+    ...session,
+    introPractice: true,
+    units: [intro],
+    turn: 0,
+    question: null,
+    feedback: null,
+  };
+  words.nextWordQuestion(result.session);
+  slots = [];
+  refs = [];
+  const tree = render();
+  refs[0].current = { base: result, events: [] };
+  refs[4].current = 'ui-owner';
+  storage.set('words-journal:ui-owner', JSON.stringify(refs[0].current));
+  return tree;
+}
+node = renderIntroduction();
+assert.equal(
+  find(node, (n) => n.props?.className === 'words-next-review'),
+  undefined,
+);
+assert.ok(find(node, (n) => n.type === 'button' && n.props.children === 'Already know'));
+find(
+  node,
+  (n) => n.type === 'button' && n.props.className === 'primary words-main-action',
+).props.onClick();
+node = render();
+const introView = load('lib/words-journal').journalView(refs[0].current).session;
+assert.equal(introView.turn, 0);
+assert.equal(introView.units[0].state.due, day);
+assert.notEqual(introView.question.kind, 'intro');
+node = renderIntroduction();
+find(node, (n) => n.type === 'button' && n.props.children === 'Already know').props.onClick();
+assert.equal(
+  load('lib/words-journal').journalView(refs[0].current).session.question.knownCheck,
+  true,
+);
+assert.equal(
+  load('lib/words-journal').journalView(refs[0].current).session.units[0].state.due,
+  day,
+);
+console.log(
+  'PASS: intro shows Continue and Already know without a review date; both actions work through the actual UI journal, retaining the due date until an answer.',
+);
