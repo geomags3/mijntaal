@@ -63,7 +63,8 @@ for (const relative of candidates) {
   }
   if (
     privateRoots.has(relative.split('/')[0]) ||
-    ['AGENTS.md', 'CLAUDE.md'].includes(path.basename(relative)) ||
+    (path.basename(relative) === 'AGENTS.md' && relative !== 'AGENTS.md') ||
+    path.basename(relative) === 'CLAUDE.md' ||
     ['.openai/hosting.json', '.openai/deployment.local.json'].includes(relative) ||
     relative
       .split('/')

@@ -41,7 +41,7 @@ Open the printed URL, normally http://127.0.0.1:5173. Use `/signin-with-chatgpt?
 
 For subsequent Sites updates, `pnpm sites:stage` prepares an isolated deployment copy using your ignored hosting configuration. Publishing continues through the authenticated Sites workflow; see [deployment instructions](docs/SITES.md#deploy-changes-from-one-working-folder).
 
-For a guided map of the application, configuration and deployment files, see [Project structure](docs/PROJECT_STRUCTURE.md).
+For a guided map of the application, configuration and deployment files, see [Project structure](docs/PROJECT_STRUCTURE.md). Coding agents should start with [AGENTS.md](AGENTS.md).
 
 ## Checks
 

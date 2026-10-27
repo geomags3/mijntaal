@@ -47,6 +47,7 @@ try {
   }
   git(source, 'init', '--quiet');
   write('package.json', '{"type":"module"}\n');
+  write('AGENTS.md', '# Shared project instructions\nUse synthetic test data.\n');
   write('.openai/hosting.json', fs.readFileSync(path.join(source, '.openai/hosting.example.json')));
   assert.match(run().stderr, /Set project_id/);
   const hosting = { project_id: siteId, d1: 'DB', r2: 'BUCKET', capabilities: ['mcp'] };
@@ -62,6 +63,10 @@ try {
   assert.equal(result.deployed, false);
   assert.equal(result.project_id, siteId);
   assert.ok(fs.existsSync(path.join(checkout, 'app/api/backup/route.ts')));
+  assert.equal(
+    fs.readFileSync(path.join(checkout, 'AGENTS.md'), 'utf8'),
+    fs.readFileSync(path.join(source, 'AGENTS.md'), 'utf8'),
+  );
   for (const excluded of ['.git', 'node_modules', '.sites-runtime'])
     assert.ok(!fs.existsSync(path.join(checkout, excluded)));
   assert.equal(
@@ -92,6 +97,16 @@ try {
   );
   assert.match(run('--checkout', checkout).stderr, /different Site/);
   write('.openai/hosting.json', originalManifest);
+  write('AGENTS.md', ['sk', 'a'.repeat(40)].join('-'));
+  assert.match(run().stderr, /Provider credential pattern: AGENTS\.md/);
+  write('AGENTS.md', '# Shared project instructions\nUse synthetic test data.\n');
+  for (const privateGuide of ['notes/AGENTS.md', 'CLAUDE.md']) {
+    write(privateGuide, 'Private session notes.');
+    git(source, 'add', '--force', privateGuide);
+    assert.ok(run().stderr.includes(`Private data/configuration path: ${privateGuide}`));
+    git(source, 'rm', '--cached', privateGuide);
+    fs.unlinkSync(path.join(source, privateGuide));
+  }
   fs.symlinkSync(path.join(temporary, 'outside'), path.join(source, 'linked-file'));
   assert.notEqual(run().status, 0, 'Symlinks must fail closed');
   fs.unlinkSync(path.join(source, 'linked-file'));

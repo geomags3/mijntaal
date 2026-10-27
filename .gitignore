@@ -46,8 +46,9 @@ yarn-error.log*
 *.sqlite3-shm
 *.log
 
-# Local assistant instructions and memory
+# Local assistant instructions and memory; share only the root project guide.
 AGENTS.md
+!/AGENTS.md
 CLAUDE.md
 /.claude/
 /.claude-mem/
