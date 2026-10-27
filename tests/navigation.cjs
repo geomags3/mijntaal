@@ -6,7 +6,40 @@ const fs = require('node:fs'),
   React = require('react');
 const file = path.join(__dirname, '../app/components/app-header.tsx'),
   exportsObject = {};
-let warmed = [];
+let warmed = [],
+  headerOpen = false,
+  headerRefCursor = 0,
+  headerEffect;
+const headerRefs = [],
+  headerHooks = {
+    useState() {
+      return [
+        headerOpen,
+        (value) => (headerOpen = typeof value === 'function' ? value(headerOpen) : value),
+      ];
+    },
+    useRef(initial) {
+      const index = headerRefCursor++;
+      return (headerRefs[index] ||= { current: initial });
+    },
+    useId: () => 'test-navigation',
+    useEffect(effect) {
+      headerEffect = effect;
+    },
+  },
+  documentEvents = new Map(),
+  windowEvents = new Map(),
+  mediaEvents = new Map();
+function events(listeners) {
+  return {
+    addEventListener(name, listener) {
+      listeners.set(name, listener);
+    },
+    removeEventListener(name, listener) {
+      if (listeners.get(name) === listener) listeners.delete(name);
+    },
+  };
+}
 vm.runInNewContext(
   ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: {
@@ -17,7 +50,13 @@ vm.runInNewContext(
   }).outputText,
   {
     exports: exportsObject,
+    document: events(documentEvents),
+    window: {
+      ...events(windowEvents),
+      matchMedia: () => ({ matches: true, ...events(mediaEvents) }),
+    },
     require(name) {
+      if (name === 'react') return headerHooks;
       if (name === 'next/link') return { default: 'a' };
       if (name === 'next/image') return { default: 'img' };
       if (name.includes('client-data'))
@@ -37,8 +76,12 @@ function links(node, out = []) {
   for (const child of React.Children.toArray(node.props?.children)) links(child, out);
   return out;
 }
+function renderHeader(props) {
+  headerRefCursor = 0;
+  return exportsObject.default(props);
+}
 let destinations = [];
-const header = exportsObject.default({
+const header = renderHeader({
     active: 'Search',
     onNavigate: (name) => destinations.push(name),
   }),
@@ -71,9 +114,7 @@ for (const modifier of ['ctrlKey', 'metaKey', 'shiftKey', 'altKey']) {
   assert.equal(prevented, false);
   assert.equal(destinations.length, before);
 }
-const standalone = links(exportsObject.default({ active: 'Texts' })).find(
-  (x) => x.props.href === '/texts',
-);
+const standalone = links(renderHeader({ active: 'Texts' })).find((x) => x.props.href === '/texts');
 prevented = false;
 standalone.props.onClick({
   preventDefault() {
@@ -86,6 +127,80 @@ assert.ok(warmed.includes('/api/text-library'));
 console.log(
   'PASS: Texts and all main navigation links invoke the internal view switch; modified clicks/native fallback preserve real URLs; data prefetch remains available.',
 );
+// The mobile disclosure remains operable without changing the real navigation URLs.
+const headerProps = { active: 'Practice', onNavigate: (name) => destinations.push(name) };
+let mobile = renderHeader(headerProps);
+const toggle = () =>
+  find(mobile, (node) => node.type === 'button' && 'aria-expanded' in node.props);
+const navigation = () => find(mobile, (node) => node.type === 'nav');
+assert.equal(toggle().props['aria-expanded'], false);
+assert.equal(toggle().props['aria-controls'], navigation().props.id);
+let focusedCurrent = 0,
+  focusedToggle = 0;
+const navTarget = {},
+  toggleTarget = {};
+headerRefs[0].current = {
+  contains: (target) => target === navTarget,
+  querySelector: () => ({
+    focus() {
+      focusedCurrent++;
+    },
+  }),
+};
+headerRefs[1].current = {
+  contains: (target) => target === toggleTarget,
+  focus() {
+    focusedToggle++;
+  },
+};
+function openMobile() {
+  toggle().props.onClick();
+  mobile = renderHeader(headerProps);
+  assert.equal(toggle().props['aria-expanded'], true);
+  return headerEffect();
+}
+let cleanup = openMobile();
+assert.equal(focusedCurrent, 1);
+documentEvents.get('pointerdown')({ target: navTarget });
+assert.equal(headerOpen, true);
+documentEvents.get('pointerdown')({ target: toggleTarget });
+assert.equal(headerOpen, true);
+let escapePrevented = false;
+documentEvents.get('keydown')({
+  key: 'Escape',
+  preventDefault() {
+    escapePrevented = true;
+  },
+});
+assert.equal(headerOpen, false);
+assert.equal(escapePrevented, true);
+assert.equal(focusedToggle, 1);
+cleanup();
+assert.equal(documentEvents.size, 0);
+assert.equal(windowEvents.size, 0);
+assert.equal(mediaEvents.size, 0);
+cleanup = openMobile();
+documentEvents.get('pointerdown')({ target: {} });
+assert.equal(headerOpen, false);
+cleanup();
+cleanup = openMobile();
+const collectionLink = links(mobile).find((node) => node.props.href === '/?tab=Collection');
+collectionLink.props.onClick({ preventDefault() {} });
+assert.equal(headerOpen, false);
+assert.equal(destinations.at(-1), 'Collection');
+cleanup();
+cleanup = openMobile();
+windowEvents.get('popstate')();
+assert.equal(headerOpen, false);
+cleanup();
+cleanup = openMobile();
+mediaEvents.get('change')();
+assert.equal(headerOpen, false);
+cleanup();
+console.log(
+  'PASS: navigation starts closed, opens with linked disclosure state, focuses the active destination, closes on Escape/outside click/selection/history/resize, and removes event listeners.',
+);
+
 // Exercise the real App component's state transition without relying on a framework route swap.
 let slots = [],
   cursor = 0;
