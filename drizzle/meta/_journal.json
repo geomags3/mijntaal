@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792699103913,
+      "tag": "0000_violet_ken_ellis",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792780496801,
+      "tag": "0001_nebulous_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792860218868,
+      "tag": "0002_bouncy_wallop",
+      "breakpoints": true
+    }
+  ]
+}

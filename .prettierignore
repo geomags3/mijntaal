@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+.vinext/
+.wrangler/
+.sites-runtime/
+public/dictionary/
+pnpm-lock.yaml
+/backup/
+outputs/
+
+# Installation-specific configuration is not public source.
+/.openai/hosting.json
+/.openai/deployment.local.json
