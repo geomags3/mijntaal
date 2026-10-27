@@ -681,11 +681,11 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
           )}
           {tab === 'Search' && (
             <>
-              <div className="search-heading">
+              <div className={'search-heading' + (entry || formTranslation ? ' has-results' : '')}>
                 <span className="eyebrow">YOUR EVERYDAY DUTCH</span>
                 <h1>
                   A word. A phrase.
-                  <br />A little more Dutch.
+                  <br /> A little more Dutch.
                 </h1>
               </div>
               <form

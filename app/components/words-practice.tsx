@@ -472,6 +472,8 @@ export default function WordsPractice({
     </div>
   );
 
+  const emptyPractice = data?.total === 0 && !summary && !pending && !validating;
+
   if (loading)
     return (
       <div className="lookup-loading">
@@ -512,8 +514,12 @@ export default function WordsPractice({
               <span className="words-symbol">
                 <BookOpen size={28} />
               </span>
-              <h2>Daily practice</h2>
-              <p>{data?.preferences?.sessionSize || 10} exercises per round.</p>
+              <h2>{emptyPractice ? 'Your first words await' : 'Daily practice'}</h2>
+              <p>
+                {emptyPractice
+                  ? 'Choose words from your collection to start practising.'
+                  : `${data?.preferences?.sessionSize || 10} exercises per round.`}
+              </p>
               <div className="words-stats">
                 <span>
                   <b>{data?.due || 0}</b>Due today
@@ -524,25 +530,34 @@ export default function WordsPractice({
               </div>
             </>
           )}
-          <button
-            className="primary"
-            disabled={
-              validating ||
-              busy ||
-              !!pending ||
-              !data?.total ||
-              (!resumable && !((data?.due || 0) + (data?.newCount || 0)))
-            }
-            onClick={start}
-          >
-            {busy ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}{' '}
-            {data?.session && !data.session.closed && data.session.question
-              ? 'Resume session'
-              : 'Start Words'}
-          </button>
-          {!pending && !resumable && !((data?.due || 0) + (data?.newCount || 0)) && (
-            <p className="words-small">All done for today.</p>
+          {emptyPractice ? (
+            <button className="primary" onClick={onCollection}>
+              <BookOpen size={17} /> Choose words
+            </button>
+          ) : (
+            <button
+              className="primary"
+              disabled={
+                validating ||
+                busy ||
+                !!pending ||
+                !data?.total ||
+                (!resumable && !((data?.due || 0) + (data?.newCount || 0)))
+              }
+              onClick={start}
+            >
+              {busy ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}{' '}
+              {data?.session && !data.session.closed && data.session.question
+                ? 'Resume session'
+                : 'Start Words'}
+            </button>
           )}
+          {!!data?.total &&
+            !pending &&
+            !resumable &&
+            !((data?.due || 0) + (data?.newCount || 0)) && (
+              <p className="words-small">All done for today.</p>
+            )}
           {!!data?.waitingNew && <p className="words-small">{data.waitingNew} new words waiting</p>}
           <p className="words-small">
             {pending
@@ -553,9 +568,11 @@ export default function WordsPractice({
                 ? 'Progress synced'
                 : (data?.total || 0) + ' entries in practice.'}
           </p>
-          <button className="text-action" onClick={onCollection}>
-            Choose words from Collection
-          </button>
+          {!emptyPractice && (
+            <button className="text-action" onClick={onCollection}>
+              Choose words from Collection
+            </button>
+          )}
         </section>
       </>
     );
