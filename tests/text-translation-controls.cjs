@@ -29,21 +29,32 @@ function text(node) {
   return React.Children.toArray(node?.props?.children).map(text).join('');
 }
 const flush = () => new Promise(setImmediate);
-async function mount({ openAI = false } = {}) {
+async function mount({ openAI = false, dictionary, lookup, translationAvailable = true } = {}) {
   const slots = [],
     calls = [],
     cached = new Map(),
     preloads = [];
   let cursor = 0,
     effects = [],
-    failure = false;
+    failure = false,
+    selection = '';
+  const parent = { nodeType: 1, closest: () => parent };
+  const dictionaryEntry = (query) => ({
+    found: true,
+    lemma: query,
+    partOfSpeech: 'verb',
+    article: '',
+    forms: [],
+    related: [],
+    senses: [{ meaning: 'to be', usage: '', example: '', exampleTranslation: '' }],
+  });
   const fixture = {
     id: 'lesson',
     title: 'Synthetic lesson',
     source: '',
     scope: 'synthetic-owner-audio',
     keyConfigured: openAI,
-    translationReady: true,
+    translationReady: translationAvailable,
     audioConfigured: true,
     segments: [
       { id: 'one', nl: 'Ik ben thuis.', en: '', audioReady: false },
@@ -93,7 +104,21 @@ async function mount({ openAI = false } = {}) {
       history: { replaceState() {} },
       addEventListener() {},
       removeEventListener() {},
-      getSelection: () => ({ toString: () => '' }),
+      innerWidth: 850,
+      innerHeight: 900,
+      getSelection: () => ({
+        toString: () => selection,
+        rangeCount: selection ? 1 : 0,
+        anchorNode: { parentElement: parent },
+        focusNode: { parentElement: parent },
+        getRangeAt: () => ({
+          commonAncestorContainer: parent,
+          getClientRects: () => [{ width: 100, height: 20, top: 100, bottom: 120, left: 50 }],
+        }),
+        removeAllRanges: () => {
+          selection = '';
+        },
+      }),
     },
     localStorage: {
       getItem() {
@@ -104,7 +129,20 @@ async function mount({ openAI = false } = {}) {
     document: { activeElement: null, addEventListener() {}, removeEventListener() {} },
     fetch: async (url, options) => {
       const body = JSON.parse(options.body);
-      calls.push({ url, body });
+      calls.push({ url, body, signal: options.signal });
+      if (url === '/api/materials') return { ok: true, json: async () => ({ id: 'saved' }) };
+      if (url === '/api/lookup') {
+        const value = lookup
+          ? await lookup(body, options.signal)
+          : {
+              ...dictionaryEntry(body.query),
+              translationProvider: 'azure',
+              senses: [
+                { meaning: 'translated selection', usage: '', example: '', exampleTranslation: '' },
+              ],
+            };
+        return { ok: true, json: async () => value };
+      }
       assert.equal(
         url,
         '/api/texts',
@@ -139,9 +177,9 @@ async function mount({ openAI = false } = {}) {
             url === '/api/settings'
               ? {
                   keyConfigured: openAI,
-                  translationReady: true,
+                  translationReady: translationAvailable,
                   audioReady: true,
-                  preferences: { aiEnrichment: 'off' },
+                  preferences: { aiEnrichment: openAI ? 'auto' : 'off' },
                 }
               : url.startsWith('/api/text-library')
                 ? []
@@ -151,15 +189,8 @@ async function mount({ openAI = false } = {}) {
       if (name.includes('audio-sequence')) return { AudioSequence: Player };
       if (name.includes('local-dictionary'))
         return {
-          localLookup: async (query) => ({
-            found: true,
-            lemma: query,
-            partOfSpeech: 'verb',
-            article: '',
-            forms: [],
-            related: [],
-            senses: [{ meaning: 'to be', usage: '', example: '', exampleTranslation: '' }],
-          }),
+          localLookup: async (query) =>
+            dictionary ? dictionary(query, dictionaryEntry) : dictionaryEntry(query),
         };
       if (name.includes('text-audio')) return { audioGroups: (segments) => [segments] };
       if (name.includes('text-preparation'))
@@ -204,6 +235,9 @@ async function mount({ openAI = false } = {}) {
     calls,
     cached,
     preloads,
+    select: (value) => {
+      selection = value;
+    },
     setFailure: (value) => {
       failure = value;
     },
@@ -220,14 +254,22 @@ const button = (tree, label) => find(tree, (n) => n.type === 'button' && text(n)
   assert.equal(shown.calls.length, 1);
   assert.deepEqual(Array.from(shown.calls[0].body.segments), ['one', 'two']);
   assert.match(text(tree), /I am at home\./);
-  assert.match(text(tree), /Azure Translator/);
+  assert.equal(
+    find(tree, (n) => n.props?.className === 'sentence-provider'),
+    undefined,
+  );
   const stored = shown.cached.get('/api/texts?id=lesson');
   assert.equal(stored.segments[0].translationProvider, 'azure');
   assert.equal(stored.segments[0].translationFallback, false);
   find(tree, (n) => n.type === 'button' && n.props.className === 'word').props.onClick();
   await flush();
   tree = shown.render();
-  assert.match(text(tree), /Connect OpenAI in Settings to translate the selected form/);
+  assert.doesNotMatch(
+    text(tree),
+    /MEANING IN THIS SENTENCE|Connect OpenAI in Settings to translate the selected form/,
+  );
+  assert.match(text(tree), /to be/);
+  assert.ok(find(tree, (n) => n.props?.['aria-label'] === 'Save meaning 1'));
   assert.equal(button(tree, 'Translate this form'), undefined);
   assert.equal(button(tree, 'Explain in this sentence'), undefined);
   assert.equal(
@@ -259,13 +301,106 @@ const button = (tree, label) => find(tree, (n) => n.type === 'button' && text(n)
   find(tree, (n) => n.type === 'button' && n.props.className === 'word').props.onClick();
   await flush();
   tree = ai.render();
-  assert.ok(button(tree, 'Translate this form'));
+  assert.equal(button(tree, 'Translate this form'), undefined);
+  assert.equal(ai.calls.length, 0, 'dictionary hits never request contextual AI automatically');
   assert.ok(
     button(tree, 'Explain in this sentence'),
     'OpenAI-specific controls remain available when configured',
   );
+  // Explicit explanations remain separate and cannot replace the instant dictionary meaning.
+  await button(tree, 'Explain in this sentence').props.onClick();
+  tree = ai.render();
+  assert.equal(ai.calls.length, 1);
+  assert.equal(ai.calls[0].body.mode, undefined);
+  assert.match(text(tree), /to be/);
+  assert.ok(find(tree, (n) => n.props?.['aria-label'] === 'AI explanation'));
+
+  const form = await mount({
+    openAI: true,
+    dictionary: (query, make) => ({
+      ...make(query),
+      lemma: 'zijn',
+      queryForm: {
+        text: query,
+        label: 'present singular',
+        senses: [],
+        ipa: '',
+        partOfSpeech: 'verb',
+      },
+    }),
+  });
+  tree = form.render();
+  find(
+    tree,
+    (n) => n.type === 'button' && n.props.className === 'word' && text(n) === 'ben',
+  ).props.onClick();
+  await flush();
+  tree = form.render();
+  assert.equal(form.calls.length, 0);
+  assert.ok(button(tree, 'zijn ↗'));
+  await find(tree, (n) => n.props?.['aria-label'] === 'Save meaning 1').props.onClick();
+  assert.equal(form.calls.at(-1).body.title, 'ben');
+  assert.equal(form.calls.at(-1).body.body.selectedForm, 'ben');
+  assert.equal(form.calls.at(-1).body.body.lemma, 'zijn');
+  assert.equal(form.calls.at(-1).body.body.en, 'to be');
+  assert.equal(form.calls.at(-1).body.body.meaningSource, 'Dictionary meaning');
+
+  const missing = (query, make) => ({ ...make(query), found: false, senses: [] });
+  const phrase = await mount({ dictionary: missing });
+  tree = phrase.render();
+  phrase.select('Ik ben thuis.');
+  find(tree, (n) => n.props?.['data-reading-text'] !== undefined).props.onMouseUp();
+  tree = phrase.render();
+  button(tree, 'Look up selection').props.onClick();
+  await flush();
+  tree = phrase.render();
+  assert.equal(phrase.calls.length, 1);
+  assert.equal(
+    phrase.calls[0].body.mode,
+    'translate',
+    'whole selected sentence uses normal Azure-first translation',
+  );
+  assert.equal(phrase.calls[0].body.query, 'Ik ben thuis.');
+  assert.equal(phrase.calls[0].body.context, 'Ik ben thuis.');
+  assert.match(text(tree), /translated selection/);
+  assert.doesNotMatch(text(tree), /MEANING IN THIS SENTENCE/);
+  await find(tree, (n) => n.props?.['aria-label'] === 'Save meaning 1').props.onClick();
+  assert.equal(phrase.calls.at(-1).body.title, 'Ik ben thuis.');
+  assert.equal(phrase.calls.at(-1).body.body.meaningSource, 'Translator');
+
+  let resolveOld;
+  const stale = await mount({
+    dictionary: (query, make) => (query === 'Ik' ? missing(query, make) : make(query)),
+    lookup: () =>
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+  });
+  tree = stale.render();
+  find(tree, (n) => n.props?.className === 'word' && text(n) === 'Ik').props.onClick();
+  await flush();
+  tree = stale.render();
+  const old = stale.calls[0];
+  find(tree, (n) => n.props?.className === 'word' && text(n) === 'huis').props.onClick();
+  await flush();
+  tree = stale.render();
+  assert.equal(old.signal.aborted, true);
+  resolveOld({
+    found: true,
+    lemma: 'obsolete',
+    senses: [{ meaning: 'obsolete meaning' }],
+    forms: [],
+    related: [],
+  });
+  await flush();
+  tree = stale.render();
+  assert.doesNotMatch(
+    text(tree),
+    /obsolete meaning/,
+    'late translator response cannot replace a newer selection',
+  );
   console.log(
-    'PASS: Azure-only reader show/individual/prepare translation, provider provenance merge, and separate OpenAI grammar/explanation gates. No browser/provider/audio verification.',
+    'PASS: Reader sentence preparation, dictionary-first selections, Azure-first misses, exact form saving, explicit separate AI explanations and stale-response protection. No browser/provider/audio verification.',
   );
 })().catch((error) => {
   console.error(error);

@@ -63,11 +63,9 @@ type Word = {
   entry?: Entry;
   busy: boolean;
   error?: string;
-  contextBusy?: boolean;
-  contextMeaning?: string;
-  contextLemma?: string;
-  formLabel?: string;
-  contextError?: string;
+  explanation?: Entry;
+  explanationBusy?: boolean;
+  explanationError?: string;
   back?: { nl: string; segment?: ReadingSegment };
 };
 async function api(path: string, data?: any, signal?: AbortSignal): Promise<any> {
@@ -124,7 +122,6 @@ export default function Texts({
     [current, setCurrent] = useState<Text>(sample),
     [loading, setLoading] = useState(false),
     [ready, setReady] = useState(false),
-    [autoForm, setAutoForm] = useState(true),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [adding, setAdding] = useState(false),
@@ -160,7 +157,6 @@ export default function Texts({
     currentRef = useRef(current),
     wordGeneration = useRef(0),
     wordController = useRef<AbortController | null>(null),
-    formController = useRef<AbortController | null>(null),
     prepareController = useRef<AbortController | null>(null),
     translationController = useRef<AbortController | null>(null),
     openGeneration = useRef(0),
@@ -273,7 +269,6 @@ export default function Texts({
     void player.start([text], -1);
   }
   function closeWord() {
-    formController.current?.abort();
     wordController.current?.abort();
     ++wordGeneration.current;
     wordPlayer.current?.stop();
@@ -433,7 +428,6 @@ export default function Texts({
             setReady(settings.keyConfigured);
             setTranslationReady(!!(settings.translationReady ?? settings.keyConfigured));
             setAudioReady(!!settings.audioReady);
-            setAutoForm(settings.preferences?.aiEnrichment !== 'off');
             wordPlayer.current?.setCacheScope(settings.audioCacheScope);
           }),
           loadList(),
@@ -446,7 +440,6 @@ export default function Texts({
     return () => {
       cancelWork();
       wordController.current?.abort();
-      formController.current?.abort();
       ++openGeneration.current;
       player.current?.dispose();
       wordPlayer.current?.dispose();
@@ -630,43 +623,6 @@ export default function Texts({
     else if (audioState === 'loading') player.current?.stop();
     else play();
   }
-  async function translateWordForm(selected: Word, n = wordGeneration.current) {
-    if (!ready || !selected.segment) return;
-    formController.current?.abort();
-    const controller = new AbortController();
-    formController.current = controller;
-    setWord((w) => (w ? { ...w, contextBusy: true, contextError: '' } : null));
-    try {
-      const result = await api(
-        '/api/lookup',
-        {
-          mode: 'selected-form',
-          query: selected.nl,
-          context: selected.segment.nl,
-          lemma: selected.entry?.lemma || '',
-        },
-        controller.signal,
-      );
-      if (n !== wordGeneration.current || controller.signal.aborted) return;
-      setWord((w) =>
-        w
-          ? {
-              ...w,
-              contextBusy: false,
-              contextMeaning: result.found ? result.english : '',
-              formLabel: result.formLabel,
-              contextLemma: result.baseForm,
-              contextError: result.found ? '' : 'No clear translation found for this selection.',
-            }
-          : null,
-      );
-    } catch (e) {
-      if (n === wordGeneration.current && !controller.signal.aborted)
-        setWord((w) =>
-          w ? { ...w, contextBusy: false, contextError: (e as Error).message } : null,
-        );
-    }
-  }
   async function openWord(nl: string, segment?: ReadingSegment, back?: Word['back']) {
     if (!nl.trim()) return;
     if (nl.length > 240) {
@@ -676,34 +632,37 @@ export default function Texts({
     if (audioState === 'playing') player.current?.pause();
     else if (audioState === 'loading') player.current?.stop();
     wordController.current?.abort();
-    formController.current?.abort();
     wordPlayer.current?.stop();
     const n = ++wordGeneration.current,
       controller = new AbortController();
     wordController.current = controller;
     setWord({ nl, segment, back, busy: true });
+    let entry: Entry | undefined;
     try {
-      const entry = await localLookup(nl);
-      if (n !== wordGeneration.current) return;
-      const selected = { nl, segment, back, entry, busy: false };
-      setWord(selected);
-      if (segment) {
-        if (ready && autoForm) void translateWordForm(selected, n);
-      } else if (!entry.found && translationReady) {
-        setWord({ ...selected, busy: true });
-        const translated = await api(
+      try {
+        entry = await localLookup(nl);
+      } catch (e) {
+        if (!translationReady) throw e;
+      }
+      if (n !== wordGeneration.current || controller.signal.aborted) return;
+      if ((!entry?.found || !entry.senses.length) && translationReady) {
+        entry = await api(
           '/api/lookup',
-          { mode: 'translate', query: nl },
+          {
+            mode: 'translate',
+            query: nl,
+            context: segment?.nl || '',
+            sourceLanguage: 'nl',
+            targetLanguage: 'en',
+          },
           controller.signal,
         );
-        if (n === wordGeneration.current) setWord({ ...selected, entry: translated, busy: false });
       }
+      if (n === wordGeneration.current && !controller.signal.aborted)
+        setWord({ nl, segment, back, entry, busy: false });
     } catch (e) {
-      if (n === wordGeneration.current && !controller.signal.aborted) {
-        const selected = { nl, segment, back, busy: false, error: (e as Error).message };
-        setWord(selected);
-        if (segment && ready && autoForm) void translateWordForm(selected, n);
-      }
+      if (n === wordGeneration.current && !controller.signal.aborted)
+        setWord({ nl, segment, back, entry, busy: false, error: (e as Error).message });
     }
   }
   async function explainWord() {
@@ -713,20 +672,23 @@ export default function Texts({
     wordController.current?.abort();
     const controller = new AbortController();
     wordController.current = controller;
-    setWord({ ...selected, busy: true, error: '' });
+    setWord({ ...selected, explanationBusy: true, explanationError: '' });
     try {
       const entry = await api(
         '/api/lookup',
         { query: selected.nl, context: selected.segment?.nl || '', evidence: selected.entry },
         controller.signal,
       );
-      if (n === wordGeneration.current) setWord((w) => (w ? { ...w, entry, busy: false } : null));
+      if (n === wordGeneration.current && !controller.signal.aborted)
+        setWord((w) => (w ? { ...w, explanation: entry, explanationBusy: false } : null));
     } catch (e) {
       if (n === wordGeneration.current && !controller.signal.aborted)
-        setWord((w) => (w ? { ...w, busy: false, error: (e as Error).message } : null));
+        setWord((w) =>
+          w ? { ...w, explanationBusy: false, explanationError: (e as Error).message } : null,
+        );
     }
   }
-  async function saveMeaning(meaning: string, whole = false) {
+  async function saveMeaning(meaning: string, whole = false, sourceEntry = word?.entry) {
     if (!word) return;
     setSaving(true);
     try {
@@ -741,20 +703,19 @@ export default function Texts({
           en: meaning,
           ...(!whole
             ? {
-                dictionarySnapshot: dictionarySnapshot(word.entry, word.contextLemma),
-                forms: dictionarySnapshot(word.entry, word.contextLemma)?.forms || [],
-                article: nounArticle(word.nl, word.entry, word.contextLemma),
-                partOfSpeech:
-                  !word.contextLemma || word.contextLemma === word.entry?.lemma
-                    ? word.entry?.partOfSpeech || ''
-                    : '',
+                dictionarySnapshot: dictionarySnapshot(sourceEntry),
+                forms: dictionarySnapshot(sourceEntry)?.forms || [],
+                article: nounArticle(word.nl, sourceEntry),
+                partOfSpeech: sourceEntry?.partOfSpeech || '',
                 selectedForm: word.nl,
-                lemma: word.contextLemma || word.entry?.lemma || word.nl,
-                formLabel: word.formLabel || '',
+                lemma: sourceEntry?.lemma || word.nl,
+                formLabel: sourceEntry?.queryForm?.label || '',
                 meaningSource:
-                  meaning === word.contextMeaning
-                    ? 'OpenAI contextual translation'
-                    : 'Dictionary meaning',
+                  sourceEntry === word.explanation
+                    ? 'AI explanation'
+                    : sourceEntry?.translationProvider
+                      ? 'Translator'
+                      : 'Dictionary meaning',
               }
             : {}),
           example: whole ? '' : word.segment?.nl || '',
@@ -764,8 +725,8 @@ export default function Texts({
           source: current.title,
           textId: current.id,
           segmentId: word.segment?.id,
-          sourceUrl: word.entry?.sourceUrl,
-          notes: word.entry?.queryExplanation || '',
+          sourceUrl: sourceEntry?.sourceUrl,
+          notes: sourceEntry?.queryExplanation || '',
         },
       });
       notify(
@@ -982,9 +943,10 @@ export default function Texts({
       setSaving(false);
     }
   }
-  const baseLemma = word?.contextLemma || word?.entry?.lemma || word?.nl || '';
+  const baseLemma = word?.entry?.lemma || word?.nl || '';
   const hasBaseForm =
     !!word &&
+    !word.entry?.translationProvider &&
     baseLemma.normalize('NFC').toLocaleLowerCase('nl') !==
       word.nl.normalize('NFC').toLocaleLowerCase('nl');
   const wordMeanings = word
@@ -994,16 +956,14 @@ export default function Texts({
             <b>{sense.meaning}</b>
             {sense.usage && <small>{sense.usage}</small>}
           </div>
-          {(!word.segment || !hasBaseForm) && (
-            <button
-              className="icon-button"
-              disabled={saving}
-              aria-label={'Save meaning ' + (i + 1)}
-              onClick={() => saveMeaning(sense.meaning)}
-            >
-              <Bookmark size={18} />
-            </button>
-          )}
+          <button
+            className="icon-button"
+            disabled={saving}
+            aria-label={'Save meaning ' + (i + 1)}
+            onClick={() => saveMeaning(sense.meaning)}
+          >
+            <Bookmark size={18} />
+          </button>
         </div>
       ))
     : null;
@@ -1432,15 +1392,6 @@ export default function Texts({
                             (progress[s.id]?.translation === 'loading'
                               ? 'Translating…'
                               : 'Translation not prepared yet.')}
-                          {s.en && s.translationProvider && (
-                            <small className="sentence-provider">
-                              {s.translationProvider === 'azure'
-                                ? 'Azure Translator'
-                                : s.translationFallback
-                                  ? 'OpenAI fallback'
-                                  : 'OpenAI translation'}
-                            </small>
-                          )}
                           {!s.en && current.id && !preparing && !translationBusy && (
                             <button
                               className="text-action"
@@ -1603,7 +1554,7 @@ export default function Texts({
                     <h2 lang="nl">
                       <NounTitle
                         title={word.nl}
-                        body={{ article: nounArticle(word.nl, word.entry, word.contextLemma) }}
+                        body={{ article: nounArticle(word.nl, word.entry) }}
                       />
                     </h2>
                     <button
@@ -1613,8 +1564,8 @@ export default function Texts({
                         audioReady
                           ? wordPlayer.current?.start(
                               [
-                                (nounArticle(word.nl, word.entry, word.contextLemma)
-                                  ? nounArticle(word.nl, word.entry, word.contextLemma) + ' '
+                                (nounArticle(word.nl, word.entry)
+                                  ? nounArticle(word.nl, word.entry) + ' '
                                   : '') + word.nl,
                               ],
                               -1,
@@ -1625,15 +1576,11 @@ export default function Texts({
                       <Volume2 size={22} />
                     </button>
                   </div>
-                  {word.entry?.partOfSpeech &&
-                    (!word.segment ||
-                      (word.contextMeaning &&
-                        (!word.contextLemma || word.contextLemma === word.entry.lemma))) && (
-                      <p className="grammar">{word.entry.partOfSpeech}</p>
-                    )}
+                  {word.entry?.partOfSpeech && <p className="grammar">{word.entry.partOfSpeech}</p>}
                   {hasBaseForm && (
                     <div className="base-form-link">
-                      {word.formLabel && <span>{word.formLabel} · </span>}Base form{' '}
+                      {word.entry?.queryForm?.label && <span>{word.entry.queryForm.label} · </span>}
+                      Base form{' '}
                       <button
                         onClick={() =>
                           openWord(baseLemma, undefined, { nl: word.nl, segment: word.segment })
@@ -1644,51 +1591,6 @@ export default function Texts({
                       </button>
                     </div>
                   )}
-                  {word.segment && (
-                    <section
-                      className="selected-form-meaning"
-                      aria-label="Meaning of selected form"
-                    >
-                      <small>MEANING IN THIS SENTENCE</small>
-                      {word.contextBusy ? (
-                        <p role="status">
-                          <LoaderCircle className="spin" size={14} /> Translating “{word.nl}”…
-                        </p>
-                      ) : word.contextMeaning ? (
-                        <div className="reader-meaning">
-                          <div>
-                            <b>{word.contextMeaning}</b>
-                            {word.formLabel && <small>{word.formLabel}</small>}
-                          </div>
-                          <button
-                            className="icon-button"
-                            disabled={saving}
-                            aria-label="Save selected form"
-                            onClick={() => saveMeaning(word.contextMeaning!)}
-                          >
-                            <Bookmark size={18} />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <p role="status">
-                            {word.contextError ||
-                              (ready
-                                ? 'Translation of the selected form is not prepared yet.'
-                                : 'Connect OpenAI in Settings to translate the selected form.')}
-                          </p>
-                          {ready && (
-                            <button className="text-action" onClick={() => translateWordForm(word)}>
-                              {word.contextError ? 'Retry translation' : 'Translate this form'}
-                            </button>
-                          )}
-                        </>
-                      )}
-                      <small className="meaning-source">
-                        OpenAI contextual translation · original Dutch form is kept
-                      </small>
-                    </section>
-                  )}
                   {word.busy && (
                     <p role="status">
                       <LoaderCircle className="spin" size={15} /> Looking up your Dutch…
@@ -1696,29 +1598,22 @@ export default function Texts({
                   )}
                   {word.error && <p className="alert">{word.error}</p>}
                   {word.entry?.queryExplanation && <p>{word.entry.queryExplanation}</p>}
-                  {hasBaseForm && word.entry?.senses.length ? (
-                    <details className="entry-details">
-                      <summary>
-                        Dictionary meanings · {word.entry?.lemma}
-                        <ChevronDown size={14} />
-                      </summary>
-                      {wordMeanings}
-                    </details>
-                  ) : (
-                    wordMeanings
+                  {wordMeanings}
+                  {!word.busy && !word.entry?.senses.length && (
+                    <p>
+                      No translation found. Try another selection or connect a translator in
+                      Settings.
+                    </p>
                   )}
-                  {!word.busy &&
-                    !word.contextMeaning &&
-                    !word.contextBusy &&
-                    !word.entry?.senses.length && (
-                      <p>
-                        No dictionary meaning found. Try another selection or an AI explanation.
-                      </p>
-                    )}
-                  {word.entry?.forms.length &&
-                  (!word.segment ||
-                    !word.contextLemma ||
-                    word.contextLemma === word.entry.lemma) ? (
+                  {word.error && translationReady && (
+                    <button
+                      className="secondary"
+                      onClick={() => openWord(word.nl, word.segment, word.back)}
+                    >
+                      Retry translation
+                    </button>
+                  )}
+                  {word.entry?.forms.length ? (
                     <details className="entry-details" open>
                       <summary>
                         Forms <ChevronDown size={14} />
@@ -1736,30 +1631,6 @@ export default function Texts({
                     </details>
                   ) : null}
                   {word.segment && (
-                    <button
-                      className="secondary sentence-listen-action"
-                      onClick={() => {
-                        const index = current.segments.findIndex((s) => s.id === word.segment?.id);
-                        if (index >= 0) play(index, true);
-                      }}
-                    >
-                      <Play size={16} />
-                      Play this sentence only
-                    </button>
-                  )}
-                  {word.segment && (
-                    <button
-                      className="secondary sentence-listen-action"
-                      onClick={() => {
-                        const index = current.segments.findIndex((s) => s.id === word.segment?.id);
-                        if (index >= 0) play(index);
-                      }}
-                    >
-                      <Play size={16} />
-                      Listen from this sentence
-                    </button>
-                  )}
-                  {word.segment && (
                     <div className="context">
                       <small>IN CONTEXT</small>
                       <p lang="nl">{word.segment.nl}</p>
@@ -1768,9 +1639,43 @@ export default function Texts({
                   )}
                   <PracticeModeSelect value={practice} onChange={setPractice} />
                   {ready && (
-                    <button className="secondary" disabled={word.busy} onClick={explainWord}>
+                    <button
+                      className="secondary"
+                      disabled={word.busy || word.explanationBusy}
+                      onClick={explainWord}
+                    >
                       {word.segment ? 'Explain in this sentence' : 'Explain this word'}
                     </button>
+                  )}
+                  {(word.explanationBusy || word.explanationError || word.explanation) && (
+                    <section className="ai-addition" aria-label="AI explanation">
+                      <h3>AI explanation</h3>
+                      {word.explanationBusy && (
+                        <p role="status">
+                          <LoaderCircle className="spin" size={15} /> Explaining this selection…
+                        </p>
+                      )}
+                      {word.explanationError && <p role="status">{word.explanationError}</p>}
+                      {word.explanation?.queryExplanation && (
+                        <p>{word.explanation.queryExplanation}</p>
+                      )}
+                      {word.explanation?.senses.map((sense, i) => (
+                        <div className="reader-meaning" key={i}>
+                          <div>
+                            <b>{sense.meaning}</b>
+                            {sense.usage && <small>{sense.usage}</small>}
+                          </div>
+                          <button
+                            className="icon-button"
+                            disabled={saving}
+                            aria-label={'Save explained meaning ' + (i + 1)}
+                            onClick={() => saveMeaning(sense.meaning, false, word.explanation)}
+                          >
+                            <Bookmark size={18} />
+                          </button>
+                        </div>
+                      ))}
+                    </section>
                   )}
                   {word.segment && (
                     <button
@@ -1800,7 +1705,7 @@ export default function Texts({
                   )}
                   {word.entry?.source && (
                     <p className="sheet-footnote">
-                      {word.entry.source}
+                      {word.entry.translationProvider ? 'Translator' : word.entry.source}
                       {word.entry.sourceUrl && (
                         <>
                           {' '}

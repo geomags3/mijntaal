@@ -2360,9 +2360,6 @@ h1 {
   pointer-events: auto;
   outline: 2px solid var(--action);
 }
-.sentence-listen-action {
-  margin-top: 16px;
-}
 .sentence-counter {
   font-size: 11px;
   color: var(--muted);
@@ -2437,32 +2434,10 @@ h1 {
   background: var(--surface-selected);
   font-weight: 600;
 }
-.selected-form-meaning {
-  margin: 18px 0;
-  padding: 15px;
-  background: var(--surface-subtle);
-  border-radius: 12px;
-}
-.selected-form-meaning > small,
 .dictionary-meaning-label {
   font-size: 11px;
   letter-spacing: 0.6px;
   color: var(--muted);
-}
-.selected-form-meaning p {
-  font-size: 13px;
-  line-height: 1.6;
-}
-.selected-form-meaning .reader-meaning {
-  padding: 10px 0;
-  border: 0;
-}
-.selected-form-meaning .meaning-source {
-  display: block;
-  font-size: 11px;
-  line-height: 1.6;
-  letter-spacing: 0;
-  margin-top: 6px;
 }
 .form-back {
   display: flex;
@@ -4450,12 +4425,6 @@ textarea::placeholder {
 .translation-original {
   color: var(--muted);
   font-size: 0.875rem;
-}
-.sentence-provider {
-  display: block;
-  margin-top: 0.25rem;
-  color: var(--muted);
-  font-size: 0.75rem;
 }
 
 .word-suggestions button[aria-selected='true'] {
