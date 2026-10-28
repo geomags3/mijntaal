@@ -67,7 +67,7 @@ export default function SentencesSettings({
         A round uses fewer sentences if the selected text does not have enough translated sentences.
       </p>
       {message && (
-        <p role="status" className="settings-copy">
+        <p role="status" className="settings-result">
           {message}
         </p>
       )}
@@ -82,7 +82,7 @@ export default function SentencesSettings({
         }
         onClick={() => void save()}
       >
-        {saving ? 'Saving…' : 'Save Sentences preferences'}
+        {saving ? 'Saving…' : 'Save preferences'}
       </button>
     </section>
   );

@@ -46,7 +46,6 @@ export default function SentencesPractice({
   const [data, setData] = useState<SentenceBase>({ session: null, revision: 0 }),
     [sources, setSources] = useState<Source[]>([]),
     [source, setSource] = useState('all'),
-    [mode, setMode] = useState<'blocks' | 'typing'>('blocks'),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [active, setActive] = useState(false),
@@ -276,7 +275,7 @@ export default function SentencesPractice({
     if (validating || busy || pending) return;
     setBusy(true);
     try {
-      const result = await request({ action: 'start', source, mode });
+      const result = await request({ action: 'start', source, mode: 'blocks' });
       retain({ base: { session: result.session, revision: result.revision }, events: [] });
       setError('');
       setActive(true);
@@ -397,14 +396,6 @@ export default function SentencesPractice({
                     ))}
                   </select>
                 </label>
-                <div className="practice-switch" role="group" aria-label="Answer format">
-                  <button aria-pressed={mode === 'blocks'} onClick={() => setMode('blocks')}>
-                    Word blocks
-                  </button>
-                  <button aria-pressed={mode === 'typing'} onClick={() => setMode('typing')}>
-                    Typing
-                  </button>
-                </div>
                 <small>{ready} translated sentences available</small>
               </div>
             </>

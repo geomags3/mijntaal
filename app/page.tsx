@@ -30,6 +30,7 @@ import BackupControls from './components/backup-controls';
 import AzureSettings from './components/azure-settings';
 import CollectionDetails from './components/collection-details';
 import LearningProgress from './components/learning-progress';
+import ConnectionHeading from './components/connection-heading';
 import LiveTranslation, { type LiveTranslationResult } from './components/live-translation';
 import NounTitle from './components/noun-title';
 import Practice from './components/practice';
@@ -1598,9 +1599,9 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
             <>
               <div className="section-heading">
                 <div>
-                  <span className="eyebrow">MAKE IT SOUND RIGHT</span>
+                  <span className="eyebrow">MAKE IT YOURS</span>
                   <h1>Settings</h1>
-                  <p>Translation and Dutch audio settings.</p>
+                  <p>Connections, translations and practice preferences.</p>
                 </div>
               </div>
               <AzureSettings
@@ -1614,18 +1615,10 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 }}
               />
               <section className="settings-card">
-                <div className="settings-title">
-                  <KeyRound size={20} />
-                  <h2>OpenAI API key</h2>
-                  <span
-                    className={keyConfigured ? 'connection-badge connected' : 'connection-badge'}
-                  >
-                    {keyConfigured ? 'Saved' : 'Not connected'}
-                  </span>
-                </div>
+                <ConnectionHeading title="OpenAI" configured={keyConfigured} />
                 <p className="settings-copy">
-                  Your key is encrypted on the server, scoped to your account and never returned to
-                  this page. API usage is billed to your OpenAI project.
+                  Grammar analysis, dictionary explanations and fallback translations. Your key is
+                  encrypted and scoped to your account. API usage is billed to your OpenAI project.
                 </p>
                 <label>
                   API key
@@ -1635,6 +1628,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     autoComplete="off"
                     spellCheck={false}
                     value={apiKey}
+                    disabled={settingsBusy}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder={keyConfigured ? 'Enter a replacement key…' : 'sk-…'}
                   />
@@ -1652,15 +1646,13 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     )}
                     Verify & save key
                   </button>
-                  {keyConfigured && (
-                    <button
-                      className="secondary"
-                      disabled={settingsBusy}
-                      onClick={() => saveKey('testKey')}
-                    >
-                      Test saved key
-                    </button>
-                  )}
+                  <button
+                    className="secondary"
+                    disabled={settingsBusy || !keyConfigured}
+                    onClick={() => saveKey('testKey')}
+                  >
+                    Test connection
+                  </button>
                 </div>
                 <p className="sheet-footnote">
                   Verification sends a small real request to the selected text model. Audio access
@@ -1680,6 +1672,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   </details>
                 )}
               </section>
+              <SpeechSettings onChanged={() => void load()} />
               <section className="settings-card">
                 <h2>Dictionary search</h2>
                 <label>
@@ -1749,7 +1742,6 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
               <SentencesSettings
                 onSaved={(sentences) => setSettings((s) => ({ ...s, sentences }))}
               />
-              <SpeechSettings onChanged={() => void load()} />
             </>
           )}
         </main>

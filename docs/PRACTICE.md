@@ -83,7 +83,7 @@ The indicator shows **New 0/5 → Recognize 1/5 → Build 2/5 → Recall 3/5**, 
 
 ### Start a round
 
-Open **Practice → Sentences**. Choose **All sources**, **All texts**, a particular text, or **Saved phrases**, then select a format:
+Open **Practice → Sentences**. Choose **All sources**, **All texts**, a particular text, or **Saved phrases**, then start a round. New rounds begin with word blocks; choose the answer format on each sentence:
 
 - **Word blocks:** arrange supplied Dutch words in order. This targets sentence structure with vocabulary provided.
 - **Typing:** produce the complete Dutch sentence from its English meaning, including vocabulary and spelling.

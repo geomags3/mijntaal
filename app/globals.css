@@ -1632,7 +1632,7 @@ h1 {
   margin-left: auto;
 }
 .connection-badge.connected {
-  color: #86a36b;
+  color: #365c32;
   background: #eff7e7;
 }
 .settings-copy {
@@ -4466,4 +4466,47 @@ textarea::placeholder {
   color: var(--muted);
   font-size: 0.7rem;
   flex-shrink: 0;
+}
+
+/* Shared settings controls keep connection and preference cards aligned. */
+.settings-title h2 {
+  flex: 1;
+  min-width: 0;
+}
+.settings-title > svg {
+  flex-shrink: 0;
+}
+.connection-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.settings-subsection {
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 24px;
+}
+.settings-subsection h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-card .sheet-footnote {
+  color: var(--muted);
+  margin: 16px 0 0;
+}
+.settings-card .key-actions {
+  margin-bottom: 16px;
+}
+.settings-card .key-actions button {
+  min-height: 44px;
+}
+@media (max-width: 540px) {
+  .settings-card .key-actions {
+    align-items: stretch;
+  }
+  .settings-card .key-actions .primary,
+  .settings-card .key-actions .secondary {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
 }

@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { LoaderCircle, ShieldCheck } from 'lucide-react';
+import ConnectionHeading from './connection-heading';
 import { dataChanged } from '../../lib/client-data';
 
 export default function AzureSettings({
@@ -43,14 +45,10 @@ export default function AzureSettings({
   }
   return (
     <section className="settings-card">
-      <h2>Fast translation · Azure</h2>
+      <ConnectionHeading title="Azure Translator" configured={configured} />
       <p className="settings-copy">
         Azure translates phrases and text sentences first. OpenAI provides a fallback when available
         and continues to handle grammar and dictionary explanations.
-      </p>
-      <p className="words-small">
-        {configured ? 'Azure key saved securely.' : 'Azure is not connected.'} Save or test sends a
-        short translation request to your Azure resource.
       </p>
       {error && (
         <p role="status" className="settings-result">
@@ -58,14 +56,15 @@ export default function AzureSettings({
         </p>
       )}
       <label>
-        Azure Translator subscription key
+        API key
         <input
           type="password"
+          aria-label="Azure Translator API key"
           autoComplete="off"
           value={key}
           maxLength={1000}
           disabled={busy}
-          placeholder={configured ? 'Leave blank to use saved key' : ''}
+          placeholder={configured ? 'Leave blank to use saved key' : 'Enter your Azure key…'}
           onChange={(event) => setKey(event.target.value)}
         />
       </label>
@@ -86,7 +85,8 @@ export default function AzureSettings({
           disabled={busy || (!key.trim() && !configured) || !nextRegion.trim()}
           onClick={() => void action('saveAzureKey')}
         >
-          {busy ? 'Checking…' : 'Verify & save connection'}
+          {busy ? <LoaderCircle size={16} className="spin" /> : <ShieldCheck size={16} />}
+          Verify &amp; save key
         </button>
         <button
           className="secondary"
@@ -95,16 +95,23 @@ export default function AzureSettings({
         >
           Test connection
         </button>
-        {(configured || error) && (
+      </div>
+      <p className="sheet-footnote">
+        Verification sends a short translation request to your Azure resource. Your key is encrypted
+        and scoped to your account.
+      </p>
+      {(configured || error) && (
+        <details className="remove-key">
+          <summary>Manage saved key</summary>
           <button
             className="text-action"
             disabled={busy}
             onClick={() => void action('removeAzureKey')}
           >
-            Forget Azure key
+            Remove key from this app
           </button>
-        )}
-      </div>
+        </details>
+      )}
       {message && (
         <p role="status" className="settings-result">
           {message}

@@ -104,7 +104,7 @@ export default function WordsSettings({ onSaved }: { onSaved?: (value: WordPrefe
         answers; otherwise Letters is used.
       </p>
       {message && (
-        <p role="status" className="settings-copy">
+        <p role="status" className="settings-result">
           {message}
         </p>
       )}
@@ -122,7 +122,7 @@ export default function WordsSettings({ onSaved }: { onSaved?: (value: WordPrefe
         }
         onClick={() => void save()}
       >
-        {saving ? 'Saving…' : 'Save Words preferences'}
+        {saving ? 'Saving…' : 'Save preferences'}
       </button>
     </section>
   );
