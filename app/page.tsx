@@ -17,7 +17,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AudioSequence } from '../lib/audio-sequence';
 import { clientData, dataChanged, readJson } from '../lib/client-data';
-import { localLookup, suggest } from '../lib/local-dictionary';
+import { localCandidates, localLookup, suggest } from '../lib/local-dictionary';
 import { nounArticle } from '../lib/noun-article';
 import { practiceMode, PracticeMode } from '../lib/practice-mode';
 import { FormTranslation, searchMeaningMaterial } from '../lib/search-form';
@@ -27,6 +27,7 @@ import type { LearningProgress as Learning } from '../lib/word-progress';
 import { defaultWordPreferences, WordPreferences } from '../lib/words';
 import AppHeader from './components/app-header';
 import BackupControls from './components/backup-controls';
+import AzureSettings from './components/azure-settings';
 import CollectionDetails from './components/collection-details';
 import LearningProgress from './components/learning-progress';
 import NounTitle from './components/noun-title';
@@ -162,6 +163,19 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     aiController = useRef<AbortController | null>(null),
     timer = useRef<ReturnType<typeof setTimeout> | null>(null),
     dialog = useRef<HTMLDivElement>(null);
+  const [searchLanguage, setSearchLanguage] = useState<'nl' | 'en' | 'ru'>('nl');
+  const [candidates, setCandidates] = useState<Entry[]>([]);
+  const [azureConfigured, setAzureConfigured] = useState(false);
+  const [azureRegion, setAzureRegion] = useState('');
+  const [azureError, setAzureError] = useState('');
+  const [userScope, setUserScope] = useState('');
+  const translationReady = keyConfigured || azureConfigured;
+  const searchLabel =
+    searchLanguage === 'nl'
+      ? 'Search Dutch words or phrases'
+      : searchLanguage === 'en'
+        ? 'Translate English into Dutch'
+        : 'Translate Russian into Dutch';
   function notify(message: string) {
     setNotice(message);
     if (timer.current) clearTimeout(timer.current);
@@ -192,6 +206,10 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
           engine.current?.setCacheScope(value.audioCacheScope || '');
           setAudioScope(value.audioCacheScope || '');
           setKeyConfigured(value.keyConfigured);
+          setAzureConfigured(!!value.azureConfigured);
+          setAzureRegion(value.azureRegion || '');
+          setAzureError(value.azureError || '');
+          setUserScope(value.userScope || '');
           setAudioConfigured(value.audioReady);
           setSettings(value.preferences);
         })
@@ -206,6 +224,8 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     try {
       const saved = JSON.parse(sessionStorage.getItem('dutch-search-view') || 'null');
       if (saved) {
+        if (['nl', 'en', 'ru'].includes(saved.searchLanguage))
+          setSearchLanguage(saved.searchLanguage);
         setQuery(typeof saved.query === 'string' ? saved.query : '');
         setContext(typeof saved.context === 'string' ? saved.context : '');
         if (saved.formTranslation?.found && typeof saved.formTranslation.english === 'string')
@@ -238,7 +258,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       try {
         sessionStorage.setItem(
           'dutch-search-view',
-          JSON.stringify({ query, context, entry, formTranslation }),
+          JSON.stringify({ query, context, entry, formTranslation, searchLanguage }),
         );
       } catch {}
     };
@@ -247,7 +267,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       save();
       window.removeEventListener('pagehide', save);
     };
-  }, [query, context, entry, formTranslation]);
+  }, [query, context, entry, formTranslation, searchLanguage]);
   useEffect(() => {
     if (!mainVisited.current) return;
     void load(false);
@@ -344,7 +364,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     }
     let cancelled = false;
     const t = setTimeout(() => {
-      suggest(query)
+      (searchLanguage === 'ru' ? Promise.resolve([]) : suggest(query, searchLanguage))
         .then((r) => {
           if (!cancelled) setSuggestions(r);
         })
@@ -356,7 +376,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, suggestOpen]);
+  }, [query, suggestOpen, searchLanguage]);
   async function enrich(base: Entry, n: number, next: string) {
     if (!keyConfigured || settings.aiEnrichment === 'off') return;
     aiController.current?.abort();
@@ -379,7 +399,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       if (n === searchGeneration.current && !controller.signal.aborted) setAiBusy(false);
     }
   }
-  async function translateMissing(next: string, n: number) {
+  async function translateMissing(next: string, n: number, language = searchLanguage) {
     aiController.current?.abort();
     const controller = new AbortController();
     aiController.current = controller;
@@ -388,7 +408,13 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     try {
       const result = await api(
         '/api/lookup',
-        { query: next, context, mode: 'translate' },
+        {
+          query: next,
+          context,
+          mode: 'translate',
+          sourceLanguage: language,
+          targetLanguage: language === 'nl' ? 'en' : 'nl',
+        },
         undefined,
         controller.signal,
       );
@@ -425,7 +451,9 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       if (n === searchGeneration.current && !controller.signal.aborted) setFormBusy(false);
     }
   }
-  async function search(next = query) {
+  async function search(next = query, language = searchLanguage) {
+    if (language !== searchLanguage) setSearchLanguage(language);
+    setCandidates([]);
     formRequest.current?.abort();
     setFormTranslation(null);
     setFormBusy(false);
@@ -445,13 +473,44 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     setTranslationError('');
     engine.current?.stop();
     try {
-      const result = await localLookup(next);
+      const choices = language === 'en' ? await localCandidates(next, 'en') : [];
+      const result: Entry =
+        language === 'ru'
+          ? {
+              found: false,
+              lemma: next,
+              queryExplanation: '',
+              partOfSpeech: '',
+              article: '',
+              ipa: '',
+              forms: [],
+              senses: [],
+              related: [],
+              notes: '',
+            }
+          : language === 'en'
+            ? choices[0] || {
+                found: false,
+                lemma: next,
+                queryExplanation: '',
+                partOfSpeech: '',
+                article: '',
+                ipa: '',
+                forms: [],
+                senses: [],
+                related: [],
+                notes: '',
+              }
+            : await localLookup(next);
+
       if (n !== searchGeneration.current) return;
       setEntry(result);
+      setCandidates(choices);
       setSearching(false);
       if (!result.found) {
-        if (keyConfigured && settings.aiEnrichment !== 'off') void translateMissing(next, n);
-      } else if (settings.aiEnrichment === 'auto') {
+        if (translationReady && settings.aiEnrichment !== 'off')
+          void translateMissing(next, n, language);
+      } else if (language === 'nl' && settings.aiEnrichment === 'auto') {
         if (result.queryForm && keyConfigured) void translateSearchForm(result, n);
         else void enrich(result, n, next);
       }
@@ -493,6 +552,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     engine.current?.stop();
     setQuery('');
     setContext('');
+    setCandidates([]);
     setEntry(null);
     setAiEntry(null);
     setFormTranslation(null);
@@ -528,15 +588,30 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     if (!sourceEntry) return;
     setSaving(true);
     try {
+      let selectedSense = sense;
+      if (sourceEntry.englishReferencePending) {
+        const reference: Entry = await api('/api/lookup', {
+          mode: 'translate',
+          query: sourceEntry.lemma,
+          sourceLanguage: 'nl',
+          targetLanguage: 'en',
+        });
+        if (!reference.found || !reference.senses[0]?.meaning)
+          throw Error('Add an English meaning before saving this translation.');
+        selectedSense = { ...sense, meaning: reference.senses[0].meaning };
+      }
       const material = searchMeaningMaterial(
         sourceEntry,
-        sense,
+        selectedSense,
         sourceEntry === entry ? formTranslation : null,
         context,
       );
       const practice = addPractice !== 'off' && !!material.body.en;
       material.body = {
         ...material.body,
+        ...(sourceEntry.originalInput
+          ? { originalInput: sourceEntry.originalInput, sourceLanguage: sourceEntry.sourceLanguage }
+          : {}),
         practiceMode: practice ? addPractice : 'off',
       } as typeof material.body;
       const result = await api('/api/materials', { ...material, practice });
@@ -688,6 +763,21 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   <br /> A little more Dutch.
                 </h1>
               </div>
+              <label className="search-language">
+                Translate or look up
+                <select
+                  aria-label="Search language"
+                  value={searchLanguage}
+                  onChange={(e) => {
+                    clearSearch();
+                    setSearchLanguage(e.target.value as 'nl' | 'en' | 'ru');
+                  }}
+                >
+                  <option value="nl">Dutch → English</option>
+                  <option value="en">English → Dutch</option>
+                  <option value="ru">Russian → Dutch</option>
+                </select>
+              </label>
               <form
                 className="dictionary-search"
                 onSubmit={(e) => {
@@ -698,8 +788,14 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 <Search size={22} />
                 <input
                   ref={searchInput}
-                  aria-label="Search Dutch words or phrases"
-                  placeholder="Search a Dutch word or phrase…"
+                  aria-label={searchLabel}
+                  placeholder={
+                    searchLanguage === 'nl'
+                      ? 'Search a Dutch word or phrase…'
+                      : searchLanguage === 'en'
+                        ? 'What would you like to say in Dutch?'
+                        : 'Enter a Russian word or phrase…'
+                  }
                   value={query}
                   maxLength={240}
                   onFocus={() => setSuggestOpen(true)}
@@ -718,6 +814,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     aiController.current?.abort();
                     setSearching(false);
                     setEntry(null);
+                    setCandidates([]);
                     setAiEntry(null);
                     setAiError('');
                     setAiBusy(false);
@@ -766,8 +863,10 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   Add a sentence for context <ChevronDown size={13} />
                 </summary>
                 <textarea
-                  aria-label="Dutch sentence for context"
-                  placeholder="Optional: paste the sentence where you found it."
+                  aria-label={
+                    searchLanguage === 'nl' ? 'Dutch sentence for context' : 'Translation context'
+                  }
+                  placeholder="Optional: add a sentence or surrounding text."
                   maxLength={1500}
                   value={context}
                   onChange={(e) => {
@@ -779,10 +878,10 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   }}
                 />
               </details>
-              {!keyConfigured && !connectionError && (
+              {!translationReady && !connectionError && (
                 <div className="connect-prompt">
                   <KeyRound size={16} />
-                  <span>Connect OpenAI for phrase translations and explanations.</span>
+                  <span>Connect Azure or OpenAI for phrase translations.</span>
                   <button onClick={() => navigate('Settings')}>
                     Set up <ArrowRight size={14} />
                   </button>
@@ -796,40 +895,73 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
               {searching && (
                 <div className="lookup-loading">
                   <LoaderCircle size={23} className="spin" />
-                  <p>Looking up your Dutch…</p>
+                  <p>
+                    {searchLanguage === 'nl'
+                      ? 'Looking up your Dutch…'
+                      : 'Finding Dutch translations…'}
+                  </p>
+                </div>
+              )}
+              {candidates.length > 1 && (
+                <div className="translation-candidates" aria-label="Dutch dictionary alternatives">
+                  <p>Choose the Dutch word that fits your meaning.</p>
+                  {candidates.map((candidate, i) => (
+                    <button
+                      type="button"
+                      key={i}
+                      aria-pressed={entry === candidate}
+                      onClick={() => {
+                        setEntry(candidate);
+                        setAiEntry(null);
+                        setFormTranslation(null);
+                      }}
+                    >
+                      <strong lang="nl">
+                        {candidate.article ? candidate.article + ' ' : ''}
+                        {candidate.lemma}
+                      </strong>
+                      <span>{candidate.senses[0]?.meaning}</span>
+                    </button>
+                  ))}
                 </div>
               )}
               {entry && (
                 <section className="dictionary-entry">
-                  <div className="entry-header">
-                    <div>
-                      <div className="entry-type">
-                        {entry.queryForm?.partOfSpeech || entry.partOfSpeech || 'Dutch'}{' '}
-                        {(entry.queryForm ? entry.queryForm.ipa : entry.ipa) && (
-                          <span>{entry.queryForm ? entry.queryForm.ipa : entry.ipa}</span>
-                        )}
+                  {(entry.found || searchLanguage === 'nl') && (
+                    <div className="entry-header">
+                      <div>
+                        <div className="entry-type">
+                          {entry.queryForm?.partOfSpeech || entry.partOfSpeech || 'Dutch'}{' '}
+                          {(entry.queryForm ? entry.queryForm.ipa : entry.ipa) && (
+                            <span>{entry.queryForm ? entry.queryForm.ipa : entry.ipa}</span>
+                          )}
+                        </div>
+                        <h2>
+                          <NounTitle
+                            title={entry.queryForm?.text || entry.lemma}
+                            body={{
+                              article: entry.queryForm
+                                ? nounArticle(
+                                    entry.queryForm.text,
+                                    entry,
+                                    formTranslation?.baseForm,
+                                  )
+                                : entry.article,
+                            }}
+                          />
+                        </h2>
                       </div>
-                      <h2>
-                        <NounTitle
-                          title={entry.queryForm?.text || entry.lemma}
-                          body={{
-                            article: entry.queryForm
-                              ? nounArticle(entry.queryForm.text, entry, formTranslation?.baseForm)
-                              : entry.article,
-                          }}
-                        />
-                      </h2>
+                      {audioButton(
+                        entry.queryForm?.text ||
+                          (entry.article ? entry.article + ' ' : '') + entry.lemma,
+                        'Listen to Dutch word',
+                      )}
                     </div>
-                    {audioButton(
-                      entry.queryForm?.text ||
-                        (entry.article ? entry.article + ' ' : '') + entry.lemma,
-                      'Listen to Dutch word',
-                    )}
-                  </div>
+                  )}
                   {entry.queryForm && (
                     <div className="base-form-link">
                       <span>{entry.queryForm.label} · </span>Base form{' '}
-                      <button onClick={() => search(entry.lemma)}>{entry.lemma} ↗</button>
+                      <button onClick={() => search(entry.lemma, 'nl')}>{entry.lemma} ↗</button>
                     </div>
                   )}
                   {entry.queryForm && (
@@ -880,22 +1012,24 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   {!entry.found ? (
                     <p className="unknown">
                       {translating
-                        ? 'Translating Dutch → English…'
+                        ? searchLanguage === 'nl'
+                          ? 'Translating Dutch → English…'
+                          : 'Translating into Dutch…'
                         : entry.notes || 'This is not in the dictionary.'}
                       {translating && <LoaderCircle size={18} className="spin" />}
                       {!translating && (
                         <>
                           {translationError && <span role="status"> {translationError}</span>}
-                          {keyConfigured ? (
+                          {translationReady ? (
                             <button
                               className="text-action"
                               onClick={() => translateMissing(query, searchGeneration.current)}
                             >
-                              Translate with OpenAI
+                              Translate phrase
                             </button>
                           ) : (
                             <button className="text-action" onClick={() => navigate('Settings')}>
-                              Connect OpenAI to translate this phrase
+                              Connect Azure or OpenAI to translate this phrase
                             </button>
                           )}
                         </>
@@ -903,11 +1037,42 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     </p>
                   ) : (
                     <>
+                      {entry.translationProvider && (
+                        <p className="translation-provider" role="status">
+                          {entry.translationProvider === 'azure'
+                            ? 'Azure Translator'
+                            : entry.translationFallback
+                              ? 'OpenAI fallback · Azure unavailable'
+                              : 'OpenAI translation'}
+                        </p>
+                      )}
+                      {entry.originalInput && searchLanguage !== 'nl' && (
+                        <p className="translation-original" lang={entry.sourceLanguage}>
+                          {entry.originalInput}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="text-action"
+                        onClick={() => {
+                          navigator.clipboard
+                            .writeText(entry.queryForm?.text || entry.lemma)
+                            .then(() => notify('Dutch copied.'))
+                            .catch(() =>
+                              notify('Copy was unavailable. Select and copy the Dutch text.'),
+                            );
+                        }}
+                      >
+                        Copy Dutch
+                      </button>
                       <div className="save-preference">
                         <PracticeModeSelect
                           value={addPractice}
                           onChange={setAddPractice}
-                          hasMeaning={!entry.queryForm || !!formTranslation?.found}
+                          hasMeaning={
+                            !entry.englishReferencePending &&
+                            (!entry.queryForm || !!formTranslation?.found)
+                          }
                         />
                       </div>
                       <div className="meanings">
@@ -927,7 +1092,11 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                           <article className="meaning" key={i}>
                             <span className="meaning-number">{String(i + 1).padStart(2, '0')}</span>
                             <div className="meaning-body">
-                              <h3>{sense.meaning}</h3>
+                              <h3>
+                                {entry.englishReferencePending
+                                  ? 'English meaning will be added when you save.'
+                                  : sense.meaning}
+                              </h3>
                               {sense.usage && <small>{sense.usage}</small>}
                               {sense.example && (
                                 <div className="dictionary-example">
@@ -976,7 +1145,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                           </summary>
                           <div className="related-words">
                             {entry.related.map((r, i) => (
-                              <button key={i} onClick={() => search(r.word)}>
+                              <button key={i} onClick={() => search(r.word, 'nl')}>
                                 <b lang="nl">{r.word}</b>
                                 {r.meaning && <small>{r.meaning}</small>}
                               </button>
@@ -1013,14 +1182,20 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 entry.found &&
                 keyConfigured &&
                 settings.aiEnrichment !== 'off' &&
-                entry.source !== 'OpenAI translation' && (
+                !entry.translationProvider && (
                   <section className="ai-addition">
                     <div className="ai-heading">
                       <h3>AI explanation</h3>
                       {!aiBusy && (
                         <button
                           className="text-action"
-                          onClick={() => enrich(entry, searchGeneration.current, query)}
+                          onClick={() =>
+                            enrich(
+                              entry,
+                              searchGeneration.current,
+                              searchLanguage === 'nl' ? query : entry.lemma,
+                            )
+                          }
                         >
                           {aiEntry ? 'Refresh' : 'Explain with AI'}
                         </button>
@@ -1045,7 +1220,11 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                         {aiEntry.senses.map((sense, i) => (
                           <article className="meaning" key={i}>
                             <div className="meaning-body">
-                              <h3>{sense.meaning}</h3>
+                              <h3>
+                                {entry.englishReferencePending
+                                  ? 'English meaning will be added when you save.'
+                                  : sense.meaning}
+                              </h3>
                               {sense.usage && <small>{sense.usage}</small>}
                               {sense.example && (
                                 <div className="dictionary-example">
@@ -1103,6 +1282,18 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 Dictionary evidence from{' '}
                 <a href="https://kaikki.org/dictionary/Dutch/" target="_blank" rel="noreferrer">
                   Kaikki / Wiktionary
+                </a>{' '}
+                ·{' '}
+                <a href="https://www.wikdict.com/page/download" target="_blank" rel="noreferrer">
+                  WikDict / DBnary
+                </a>{' '}
+                ·{' '}
+                <a
+                  href="https://creativecommons.org/licenses/by-sa/4.0/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  CC BY-SA 4.0
                 </a>{' '}
                 ·{' '}
                 <a
@@ -1234,6 +1425,15 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   <p>Translation and Dutch audio settings.</p>
                 </div>
               </div>
+              <AzureSettings
+                key={userScope}
+                configured={azureConfigured}
+                error={azureError}
+                region={azureRegion}
+                onChanged={() => {
+                  void load(true);
+                }}
+              />
               <section className="settings-card">
                 <div className="settings-title">
                   <KeyRound size={20} />
@@ -1320,10 +1520,10 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   </select>
                 </label>
                 <p className="settings-copy">
-                  Dictionary results appear first. AI explanations load separately and never replace
-                  them. If no dictionary entry exists, a short OpenAI translation appears instead.
-                  Off disables automatic translation too; you can still request it with a button.
-                  API usage uses your OpenAI credit.
+                  Dictionary results appear first. AI explanations load separately. When no entry
+                  exists, Azure translates first, with OpenAI as fallback when configured. Off
+                  disables automatic translation too; you can still request it with a button. AI
+                  explanations and fallback translation use your OpenAI credit.
                 </p>
                 <button
                   className="primary"
@@ -1393,7 +1593,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
             onSearch={(value) => {
               setDetailsId(null);
               navigate('Search');
-              void search(value);
+              void search(value, 'nl');
             }}
             onReset={async () => {
               await load();

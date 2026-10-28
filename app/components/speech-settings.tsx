@@ -78,8 +78,8 @@ export default function SpeechSettings({ onChanged }: { onChanged: () => void })
     <section className="settings-card">
       <h2>Dutch audio · ElevenLabs</h2>
       <p className="settings-copy">
-        One saved voice for words, practice and texts. OpenAI is used for translations and
-        explanations.
+        One saved voice for words, practice and texts. Translation providers are configured
+        separately above.
       </p>
       <details>
         <summary>API key · {status.keyConfigured ? 'Saved' : 'Not connected'}</summary>

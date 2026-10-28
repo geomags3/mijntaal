@@ -55,7 +55,7 @@ The public source repository and Sites source repository have separate commit hi
 
 Create a fresh `CREDENTIAL_ENCRYPTION_KEY` for the new installation: 32 cryptographically random bytes encoded as 64 lowercase hexadecimal characters. Configure it through Sites runtime secrets. Do not put it in the hosting manifest, repository, screenshots or chat. Once credentials have been stored, changing this key makes them unreadable; re-enter provider keys or perform a deliberate migration.
 
-Open the app's Settings to connect your own OpenAI account for translations/explanations. Connect your own ElevenLabs key, refresh My Voices, and choose a voice/model. Text and audio are independent. Test provider functions deliberately; these requests can incur charges. None of these secrets is bundled in the project.
+Open the app's Settings to connect Azure Translator with your subscription key and resource region for fast phrase/text translations. Connect your own OpenAI account for fallback translation and grammar/explanations. Keys previously stored as `MICROSOFT_AZURE_SUBSCRIPTION_KEY` and `MICROSOFT_AZURE_SUBSCRIPTION_REGION` in another project must be entered securely in this app's Settings; they are not read from deployment-wide environment variables. Connect your own ElevenLabs key, refresh My Voices, and choose a voice/model. Text and audio are independent. Test provider functions deliberately; these requests can incur charges. None of these secrets is bundled in the project.
 
 ## Verify a new installation
 

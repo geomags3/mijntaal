@@ -28,7 +28,7 @@ mijntaal/
 ├── drizzle/                  Ordered SQL migrations and Drizzle metadata
 ├── public/                   Assets served directly by the website
 │   ├── brand/                Logo and application icon
-│   └── dictionary/v1/        Processed dictionary shards and indexes
+│   └── dictionary/           Kaikki v1 shards and generated bilingual v2 overlay
 ├── scripts/                  Development, checks, data import and Sites staging
 │   └── vite/                 Vendored Sites development/build integration
 ├── tests/                    Local regression tests with controlled fixtures
@@ -58,7 +58,7 @@ app/api/*/route.ts                  app/mcp/route.ts
               D1 data   Provider APIs / R2 audio files
 ```
 
-The interface also loads bundled dictionary files directly from `public/dictionary/v1/`. Browser-side caches and pending practice events help keep interactions responsive; they are separate from the server's saved records.
+The interface also loads bundled dictionary files directly from `public/dictionary/v1/` and `public/dictionary/v2/`. The [dictionary pipeline](DICTIONARY.md) combines pinned sources in a local build-time SQLite database and exports the browser overlay independently of deployment. Browser-side caches and pending practice events help keep interactions responsive; they are separate from the server's saved records.
 
 For example, saving a phrase from the browser calls `/api/materials`. The route reads the authenticated account, parses the request and calls `addMaterial`. The service validates it, checks for an existing exact entry and writes its material and practice state to D1. Saving through MCP calls the same material service, so the browser and chat use the same collection rules.
 
@@ -101,7 +101,7 @@ Each route lives at `app/api/<name>/route.ts`. These are thin HTTP adapters, wit
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | [/api/materials](../app/api/materials/route.ts)           | List/read with `GET`, add with `POST`, update/archive/restore with `PATCH`; uses `server/materials.ts`.                                |
 | [/api/lookup](../app/api/lookup/route.ts)                 | Dictionary enrichment, phrase translation and selected word-form translation; uses `server/dictionary.ts` and `server/translation.ts`. |
-| [/api/settings](../app/api/settings/route.ts)             | Read settings; verify/save/remove an OpenAI key; save preferences.                                                                     |
+| [/api/settings](../app/api/settings/route.ts)             | Read settings; verify/save/remove OpenAI or Azure credentials; save preferences.                                                       |
 | [/api/audio-settings](../app/api/audio-settings/route.ts) | Read/manage ElevenLabs connection, voices and preferences.                                                                             |
 | [/api/speech](../app/api/speech/route.ts)                 | Current word/phrase pronunciation entry point; calls `elevenSpeech`.                                                                   |
 | [/api/text-library](../app/api/text-library/route.ts)     | Lightweight text listing without loading all text details.                                                                             |
@@ -120,7 +120,7 @@ Files immediately inside `lib/` mainly describe algorithms, types, browser utili
 
 - [local-dictionary.ts](../lib/local-dictionary.ts) loads bundled word and suggestion shards in the browser. [dictionary-entry.ts](../lib/dictionary-entry.ts) turns source dictionary rows into application entries.
 - [dictionary-snapshot.ts](../lib/dictionary-snapshot.ts) captures dictionary evidence for saved material. [word-forms.ts](../lib/word-forms.ts), [noun-article.ts](../lib/noun-article.ts) and [search-form.ts](../lib/search-form.ts) support forms, noun articles and selected forms.
-- [server/dictionary.ts](../lib/server/dictionary.ts) handles server dictionary/enrichment behavior, including upstream dictionary access. [server/translation.ts](../lib/server/translation.ts) builds structured OpenAI translation requests and handles selected forms in context.
+- [server/dictionary.ts](../lib/server/dictionary.ts) handles server dictionary/enrichment behavior, including upstream dictionary access. [server/translation.ts](../lib/server/translation.ts) tries Azure first for plain translations with an owner-scoped OpenAI fallback; selected forms and grammar remain on OpenAI. [server/azure-translation.ts](../lib/server/azure-translation.ts) provides the bounded Azure adapter; [server/azure-settings.ts](../lib/server/azure-settings.ts) stores encrypted account-scoped credentials.
 - [server/materials.ts](../lib/server/materials.ts) owns validation, duplicate detection, account-scoped reads, optimistic version checking, archive state and practice selection. Browser APIs and MCP share it.
 - [client-data.ts](../lib/client-data.ts) provides a browser JSON cache and invalidation helpers. It does not replace the database.
 

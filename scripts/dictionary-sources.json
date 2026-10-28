@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kaikki": {
+    "id": "kaikki-nl-2026-10-21",
+    "format": "mijntaal-v1",
+    "path": "public/dictionary/v1",
+    "sha256": "17d692c266f0444fa3ca0f8e075a49ccc7debe90aed2c3b0a199c33bf2169889",
+    "snapshot": "2026-10-21",
+    "url": "https://kaikki.org/dictionary/Dutch/",
+    "license": "Wiktionary CC BY-SA / GFDL; see source histories"
+  },
+  "wikdict": [
+    {
+      "id": "wikdict-en-nl-2026-06",
+      "format": "wikdict-sqlite-v2",
+      "languages": ["en", "nl"],
+      "filename": "en-nl.sqlite3",
+      "sha256": "35a0f9725926fa9d78610e07805dcfc79944c0f7b59a8e16b780074569007ff6",
+      "snapshot": "2026-06",
+      "url": "https://download.wikdict.com/dictionaries/sqlite/2_2026-06/en-nl.sqlite3",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "id": "wikdict-nl-en-2026-06",
+      "format": "wikdict-sqlite-v2",
+      "languages": ["nl", "en"],
+      "filename": "nl-en.sqlite3",
+      "sha256": "5e9a6a9b8957d3ef6cf8c80dbe41d00db4f5bd623103e9e461988b62c732df1a",
+      "snapshot": "2026-06",
+      "url": "https://download.wikdict.com/dictionaries/sqlite/2_2026-06/nl-en.sqlite3",
+      "license": "CC BY-SA 4.0"
+    }
+  ]
+}

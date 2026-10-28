@@ -34,6 +34,8 @@ export async function POST(r: Request) {
           typeof b.query === 'string' ? b.query : '',
           typeof b.context === 'string' ? b.context : '',
           r.signal,
+          b.sourceLanguage === undefined ? 'nl' : b.sourceLanguage,
+          b.targetLanguage,
         ),
       );
     return json(

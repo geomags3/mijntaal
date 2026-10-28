@@ -19,7 +19,8 @@
     "format:check": "prettier --check .",
     "check:public": "node scripts/check-public-release.mjs",
     "db:local": "node scripts/local-database.mjs",
-    "sites:stage": "node scripts/stage-sites.mjs"
+    "sites:stage": "node scripts/stage-sites.mjs",
+    "dictionary:build": "python3 scripts/dictionary-build.py"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

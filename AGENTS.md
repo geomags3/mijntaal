@@ -8,6 +8,7 @@ Read [README.md](README.md) for setup, [docs/PROJECT_STRUCTURE.md](docs/PROJECT_
 
 - [docs/SITES.md](docs/SITES.md): hosting, staging, secrets and deployment.
 - [docs/MCP.md](docs/MCP.md): the chat-facing material tools.
+- [docs/DICTIONARY.md](docs/DICTIONARY.md): pinned dictionary sources, SQLite preparation and generated bilingual JSON assets.
 - [docs/PRACTICE.md](docs/PRACTICE.md): user-facing practice goals, flows and scheduling rules. Keep it aligned with behavior changes.
 - [SECURITY.md](SECURITY.md): authentication and private data boundaries.
 
@@ -17,6 +18,7 @@ Read [README.md](README.md) for setup, [docs/PROJECT_STRUCTURE.md](docs/PROJECT_
 - `app/page.tsx` coordinates Search, Collection, Practice and Settings. `app/texts/page.tsx` selects Texts in the same application; avoid duplicating the app.
 - `app/components/` contains feature UI; `app/globals.css` contains shared styling and responsive rules.
 - `app/api/*/route.ts` and `app/mcp/route.ts` share `lib/server/` services. Keep browser and MCP validation and ownership rules consistent.
+- Plain phrase/sentence translation tries Azure first, with OpenAI fallback when configured. Grammar and dictionary enrichment remain on OpenAI; keep provider readiness and caches separate.
 - `lib/` holds dictionary, learning, journaling and audio logic; `db/schema.ts` and `drizzle/` define persisted data. Sites binds D1 as `DB` and R2 as `BUCKET`.
 
 ## Local setup and checks
@@ -47,6 +49,8 @@ pnpm build
 For documentation-only changes, formatting and the public-source check are normally sufficient. Format changed authored files rather than reformatting unrelated code. Add focused regression coverage for behavior involving data, synchronization or authorization. Several component tests use VM-based React hook harnesses; update those harnesses when changing hooks and assert observable behavior.
 
 Run `pnpm check:public` and the complete `pnpm test` suite from this public source checkout. The staging tests deliberately exercise public-template rules and do not work unchanged in a deployment snapshot that tracks its local hosting manifest.
+
+Dictionary regeneration is explicit: `pnpm dictionary:build --wikdict-dir /path/to/pinned-inputs` uses Python 3 standard-library SQLite, verifies the source lock and generates `public/dictionary/v2` over the unchanged v1 base. Normal builds do not download upstream data. Keep both layers and source attribution together; never hand-edit generated shards.
 
 ## Data and provider invariants
 

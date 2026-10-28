@@ -22,6 +22,11 @@ export const entrySchema = z.object({
   notes: z.string(),
 });
 export type Entry = z.infer<typeof entrySchema> & {
+  translationProvider?: 'azure' | 'openai';
+  translationFallback?: boolean;
+  sourceLanguage?: 'nl' | 'en' | 'ru';
+  originalInput?: string;
+  englishReferencePending?: boolean;
   source?: string;
   sourceUrl?: string;
   cached?: boolean;

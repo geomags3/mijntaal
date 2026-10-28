@@ -8,8 +8,9 @@ Collect Dutch words and texts, listen to recordings, and practise the material y
 
 ## Features
 
-- A bundled Dutch–English dictionary, with source attribution.
-- Optional OpenAI translations and explanations, including words selected in context.
+- A bundled Dutch ↔ English dictionary combining Kaikki learner details and WikDict translations, with source attribution.
+- Azure-first phrase and text translations, with optional OpenAI fallback; AI grammar and contextual word explanations.
+- English or Russian → Dutch phrase translation, with pronunciation and collection saving.
 - A personal collection with text editing, archive, import and export.
 - Words practice and sentence practice with progress saved to your account.
 - ElevenLabs pronunciation and connected text recordings with sentence highlighting.
@@ -21,7 +22,7 @@ Learn how to choose a mode, use hints and understand review intervals in the [Pr
 
 Use Node.js 24 and pnpm 11.25.0. ChatGPT Sites hosts the server, database (D1), files (R2), and account authentication. Each installation is independent.
 
-Dictionary browsing and collection/practice do not need provider keys. AI text features require your own OpenAI API access. Audio requires your own ElevenLabs key and an available voice in My Voices. Provider requests may incur charges; a chat subscription does not configure these provider accounts for this application. Do not paste keys into an AI conversation.
+Dictionary browsing and collection/practice do not need provider keys. Plain translation uses your Azure Translator key and resource region when configured in Settings, falling back to your OpenAI account when available. Grammar analysis and AI explanations require OpenAI API access. Audio requires your own ElevenLabs key and an available voice in My Voices. Provider requests may incur charges; a chat subscription does not configure these provider accounts for this application. Do not paste keys into an AI conversation.
 
 ## Create your own instance
 
@@ -57,6 +58,10 @@ pnpm build
 ```
 
 Tests use in-memory/local fixtures and mocked provider responses. Passing them does not verify actual provider access, pronunciation, or hosted OAuth. CI never requires provider secrets. See [contributing](CONTRIBUTING.md) and [security](SECURITY.md).
+
+## Dictionary updates
+
+Dictionary preparation is separate from deployment. Run `pnpm dictionary:build --wikdict-dir /path/to/pinned-inputs` to verify pinned Kaikki/WikDict sources, build a local combined SQLite database and generate static bilingual JSON assets. Normal builds use the bundled files without downloading sources. See the [dictionary pipeline guide](docs/DICTIONARY.md).
 
 ## Data and backups
 

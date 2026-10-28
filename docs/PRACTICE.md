@@ -122,3 +122,7 @@ Collection backups include supported Words history/session state, but not Senten
 ## Why practise this way?
 
 The aim is to move from seeing an answer to retrieving it yourself. Words adds spacing across days; Sentences applies recall to complete phrases and word order. Research supports the general benefits of [retrieval practice](https://pubmed.ncbi.nlm.nih.gov/16507066/) and [spaced learning](https://doi.org/10.1111/j.1467-9280.2008.02209.x). The exact MijnTaal intervals are application rules, not a validated personal memory model.
+
+## Saving reverse translations
+
+Search supports English and Russian input with Dutch results. English remains the practice reference language. Saving an Azure Russian → Dutch result first obtains an English meaning, then saves the Dutch phrase with the original Russian input retained. If that reference translation fails, the entry is not saved and the result remains available to retry. Existing saved meanings and learning progress are not regenerated when translation providers change.

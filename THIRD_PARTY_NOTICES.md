@@ -17,3 +17,9 @@ Original MijnTaal application code is distributed under the MIT License in `LICE
 ## Dependencies
 
 Installed packages retain their own licenses and notices. Their exact resolved versions and integrity values are recorded in `pnpm-lock.yaml`. Do not redistribute dependency binaries without preserving applicable notices.
+
+## WikDict bilingual dictionary
+
+`public/dictionary/v2` contains generated English → Dutch and Dutch → English translation data from [WikDict](https://www.wikdict.com/page/download), derived from Wiktionary via DBnary and licensed under [Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Attribution: WikDict by Karl Bartel, Wiktionary contributors and DBnary. Preserve source attribution, license notices and applicable share-alike terms for the generated data. The application MIT license does not replace these terms.
+
+The combined release also uses the unchanged Kaikki v1 data described above. Source snapshots, SHA-256 hashes and licenses are recorded in `scripts/dictionary-sources.json` and the v2 manifest. Reproduce the local SQLite preparation and static JSON export using the [dictionary pipeline guide](docs/DICTIONARY.md). The build-time SQLite database and downloaded upstream files are not published with the application.

@@ -4399,3 +4399,61 @@ textarea::placeholder {
     bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Bilingual dictionary lookup shares the existing Search surface. */
+.search-language {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.search-language select {
+  max-width: 65%;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+.translation-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.translation-candidates p {
+  width: 100%;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.translation-candidates button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: white;
+  color: var(--ink);
+  text-align: left;
+}
+.translation-candidates button[aria-pressed='true'] {
+  background: var(--surface-selected);
+}
+.translation-candidates span,
+.translation-provider,
+.translation-original {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.sentence-provider {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}

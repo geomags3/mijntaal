@@ -1,4 +1,11 @@
-export type ReadingSegment = { id: string; nl: string; en: string; audioReady: boolean };
+export type ReadingSegment = {
+  id: string;
+  nl: string;
+  en: string;
+  audioReady: boolean;
+  translationProvider?: 'azure' | 'openai';
+  translationFallback?: boolean;
+};
 /** Keep imported sentence boundaries; split unusually long fragments at word boundaries. */
 export function segmentText(text: string, max = 1000): string[] {
   const result: string[] = [];

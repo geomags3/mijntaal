@@ -1,4 +1,5 @@
 import { sentencePreferencesSchema } from '../../../lib/sentences';
+import { configureAzure, getAzureSettings } from '../../../lib/server/azure-settings';
 import {
   AppError,
   body,
@@ -23,10 +24,18 @@ import { wordPreferencesSchema } from '../../../lib/words';
 export async function GET(r: Request) {
   try {
     const user = owner(r),
-      [s, audio] = await Promise.all([getSettings(user), elevenStatus(user)]);
+      [s, audio, azure] = await Promise.all([
+        getSettings(user),
+        elevenStatus(user),
+        getAzureSettings(user),
+      ]);
     return json({
       userScope: await hash('client-data:' + user),
       keyConfigured: s.keyConfigured,
+      azureConfigured: azure.configured,
+      azureRegion: azure.region,
+      azureError: azure.error,
+      translationReady: s.keyConfigured || azure.configured,
       preferences: s.preferences,
       language: 'nl-NL',
       audioCacheScope: audio.scope,
@@ -42,6 +51,16 @@ export async function POST(r: Request) {
     mutation(r);
     const user = owner(r),
       b = await body(r);
+    if (['saveAzureKey', 'testAzureKey', 'removeAzureKey'].includes(b.action)) {
+      const result = await configureAzure(user, b, r.signal);
+      return json({
+        ok: true,
+        azureConfigured: result.configured,
+        azureRegion: result.region,
+        translationReady: result.configured || (await getSettings(user)).keyConfigured,
+        message: result.message,
+      });
+    }
     if (b.action === 'saveSentencesPreferences') {
       const sentences = sentencePreferencesSchema.safeParse(b.sentences);
       if (!sentences.success) throw new AppError('Choose a session size from 1 to 30.');

@@ -12,6 +12,27 @@ let slots = [],
   removed = [],
   resolveLookup;
 const players = [];
+const requests = [];
+const candidates = ['bank', 'oever'].map((lemma) => ({
+  found: true,
+  lemma,
+  partOfSpeech: 'noun',
+  article: 'de',
+  ipa: '',
+  forms: [],
+  related: [],
+  queryExplanation: '',
+  notes: '',
+  senses: [
+    {
+      meaning: 'bank',
+      usage: lemma === 'oever' ? 'edge of a river' : 'financial institution',
+      example: '',
+      exampleTranslation: '',
+    },
+  ],
+  source: 'WikDict',
+}));
 const hooks = {
   useState(initial) {
     const i = cursor++;
@@ -49,6 +70,7 @@ class AudioSequence {
     this.changed(-1, 'playing');
   }
   dispose() {}
+  setCacheScope() {}
 }
 const stubs = new Map(),
   stub = (name) => {
@@ -71,13 +93,71 @@ vm.runInNewContext(
     setTimeout,
     clearTimeout,
     URLSearchParams,
+    AbortController,
+    fetch: async (url, options) => {
+      const body = JSON.parse(options.body);
+      requests.push({ url, body });
+      if (url === '/api/materials') return { ok: true, json: async () => ({ id: 'saved' }) };
+      const reverse = body.sourceLanguage === 'ru';
+      return {
+        ok: true,
+        json: async () => ({
+          found: true,
+          lemma: reverse ? 'Ik ben moe.' : body.query,
+          partOfSpeech: '',
+          article: '',
+          ipa: '',
+          forms: [],
+          related: [],
+          notes: '',
+          queryExplanation: '',
+          senses: [
+            {
+              meaning: reverse ? '' : 'I am tired.',
+              usage: '',
+              example: '',
+              exampleTranslation: '',
+            },
+          ],
+          translationProvider: 'azure',
+          englishReferencePending: reverse,
+          originalInput: body.query,
+          sourceLanguage: body.sourceLanguage,
+        }),
+      };
+    },
     require(name) {
       if (name === 'react') return hooks;
-      if (name.includes('client-data')) return { clientData: { peek() {} } };
+      if (name.includes('client-data'))
+        return {
+          clientData: { peek() {} },
+          dataChanged() {},
+          readJson: async (url) =>
+            url.startsWith('/api/materials')
+              ? []
+              : {
+                  azureConfigured: true,
+                  keyConfigured: false,
+                  azureRegion: 'westeurope',
+                  audioReady: false,
+                  preferences: { aiEnrichment: 'auto' },
+                },
+        };
       if (name.includes('audio-sequence')) return { AudioSequence };
       if (name.includes('local-dictionary'))
-        return { localLookup: () => new Promise((r) => (resolveLookup = r)) };
+        return {
+          localLookup: () => new Promise((r) => (resolveLookup = r)),
+          localCandidates: async () => candidates,
+        };
       if (name.startsWith('./components/')) return stub(name);
+      if (name.includes('search-form'))
+        return {
+          searchMeaningMaterial: (entry, sense) => ({
+            kind: 'phrase',
+            title: entry.lemma,
+            body: { en: sense.meaning },
+          }),
+        };
       if (name.startsWith('../lib/')) return {};
       return require(name);
     },
@@ -185,6 +265,68 @@ const render = () => {
     'second click cancels loading without starting another request',
   );
   assert.equal(players[0].calls.length, 1);
+  // English lookup exposes distinct Dutch candidates and preserves selected Dutch on save.
+  effects.find(
+    (f) => f.toString().includes('setVisibleCount(50)') && f.toString().includes('load(false)'),
+  )();
+  await new Promise(setImmediate);
+  app = render();
+  find(app, (n) => label(n, 'Search language')).props.onChange({ target: { value: 'en' } });
+  app = render();
+  find(app, (n) => label(n, 'Translate English into Dutch')).props.onChange({
+    target: { value: 'bank' },
+  });
+  app = render();
+  find(app, (n) => n.type === 'form' && n.props.className === 'dictionary-search').props.onSubmit({
+    preventDefault() {},
+  });
+  await new Promise(setImmediate);
+  app = render();
+  const alternatives = find(app, (n) => label(n, 'Dutch dictionary alternatives'));
+  assert.ok(
+    alternatives,
+    'English lookup shows alternatives rather than treating English as Dutch',
+  );
+  find(
+    alternatives,
+    (n) => n.type === 'button' && n.props.children[0].props.children.includes('oever'),
+  ).props.onClick();
+  app = render();
+  await find(app, (n) => label(n, 'Save meaning 1')).props.onClick();
+  assert.equal(requests.find((r) => r.url === '/api/materials').body.title, 'oever');
+  assert.equal(
+    requests.filter((r) => r.url === '/api/lookup').length,
+    0,
+    'dictionary match needs no provider request',
+  );
+  // Azure alone enables reverse translation. Russian source is retained and English is deferred until Save.
+  app = render();
+  find(app, (n) => label(n, 'Search language')).props.onChange({ target: { value: 'ru' } });
+  app = render();
+  find(app, (n) => label(n, 'Translate Russian into Dutch')).props.onChange({
+    target: { value: '\u042f \u0443\u0441\u0442\u0430\u043b.' },
+  });
+  app = render();
+  find(app, (n) => n.type === 'form' && n.props.className === 'dictionary-search').props.onSubmit({
+    preventDefault() {},
+  });
+  await new Promise(setImmediate);
+  app = render();
+  assert.equal(requests.filter((r) => r.url === '/api/lookup').length, 1);
+  assert.equal(requests.at(-1).body.sourceLanguage, 'ru');
+  assert.equal(requests.at(-1).body.targetLanguage, 'nl');
+  assert.ok(find(app, (n) => n.props?.className === 'translation-provider'));
+  await find(app, (n) => label(n, 'Save meaning 1')).props.onClick();
+  const savedRussian = requests.filter((r) => r.url === '/api/materials').at(-1).body;
+  assert.equal(savedRussian.title, 'Ik ben moe.');
+  assert.equal(savedRussian.body.en, 'I am tired.');
+  assert.equal(savedRussian.body.originalInput, '\u042f \u0443\u0441\u0442\u0430\u043b.');
+  assert.equal(savedRussian.body.sourceLanguage, 'ru');
+  assert.equal(
+    requests.filter((r) => r.url === '/api/lookup').length,
+    2,
+    'English reference generated only on save',
+  );
   console.log(
     'PASS: actual Search clear control resets query/context/results, focuses input, rejects stale lookups; Forms open by default, root pronunciation state propagated and repeated loading click cancels.',
   );

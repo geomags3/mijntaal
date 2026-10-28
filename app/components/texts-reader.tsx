@@ -48,6 +48,7 @@ type Text = {
   segments: ReadingSegment[];
   scope: string;
   keyConfigured: boolean;
+  translationReady?: boolean;
   audioConfigured?: boolean;
   wordScope?: string;
   version?: number;
@@ -167,6 +168,7 @@ export default function Texts({
     timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasActive = useRef(visible),
     activeRef = useRef(visible);
+  const [translationReady, setTranslationReady] = useState(false);
   activeRef.current = visible;
   function restoreReaderLocation() {
     if (window.location.pathname !== '/texts') return;
@@ -226,13 +228,16 @@ export default function Texts({
       if (generation === listGeneration.current) setListLoading(false);
     }
   }
-  function mergeTranslations(textId: string, values: { id: string; en: string }[]) {
+  function mergeTranslations(
+    textId: string,
+    values: Pick<ReadingSegment, 'id' | 'en' | 'translationProvider' | 'translationFallback'>[],
+  ) {
     if (currentRef.current.id !== textId) return;
     const next = {
       ...currentRef.current,
       segments: currentRef.current.segments.map((s) => ({
         ...s,
-        en: values.find((v) => v.id === s.id)?.en || s.en,
+        ...(values.find((v) => v.id === s.id) || {}),
       })),
     };
     currentRef.current = next;
@@ -316,6 +321,7 @@ export default function Texts({
       ]);
       setCurrent(text);
       setReady(text.keyConfigured);
+      setTranslationReady(!!(text.translationReady ?? text.keyConfigured));
       setAudioReady(!!text.audioConfigured);
       if (!same) {
         player.current?.configure(text.segments, text.scope);
@@ -425,6 +431,7 @@ export default function Texts({
         await Promise.all([
           readJson('/api/settings').then((settings) => {
             setReady(settings.keyConfigured);
+            setTranslationReady(!!(settings.translationReady ?? settings.keyConfigured));
             setAudioReady(!!settings.audioReady);
             setAutoForm(settings.preferences?.aiEnrichment !== 'off');
             wordPlayer.current?.setCacheScope(settings.audioCacheScope);
@@ -507,8 +514,8 @@ export default function Texts({
     }
   }
   async function translateAll() {
-    if (!ready) {
-      notify('Connect OpenAI in Settings to translate.');
+    if (!translationReady) {
+      notify('Connect Azure or OpenAI in Settings to translate.');
       return;
     }
     if (!current.id) {
@@ -555,7 +562,7 @@ export default function Texts({
     const text = currentRef.current;
     await Promise.allSettled([
       (async () => {
-        if (!text.keyConfigured) return;
+        if (!(text.translationReady ?? text.keyConfigured)) return;
         const missing = text.segments.filter((s) => !s.en);
         for (let i = 0; i < missing.length; i += 4) {
           if (controller.signal.aborted) return;
@@ -591,7 +598,7 @@ export default function Texts({
   async function retry(s: ReadingSegment) {
     if (!audioReady) return;
     const text = currentRef.current;
-    if (!s.en && ready)
+    if (!s.en && translationReady)
       try {
         await translateBatch(text, [s]);
       } catch (e) {
@@ -682,7 +689,7 @@ export default function Texts({
       setWord(selected);
       if (segment) {
         if (ready && autoForm) void translateWordForm(selected, n);
-      } else if (!entry.found && ready) {
+      } else if (!entry.found && translationReady) {
         setWord({ ...selected, busy: true });
         const translated = await api(
           '/api/lookup',
@@ -1425,6 +1432,15 @@ export default function Texts({
                             (progress[s.id]?.translation === 'loading'
                               ? 'Translating…'
                               : 'Translation not prepared yet.')}
+                          {s.en && s.translationProvider && (
+                            <small className="sentence-provider">
+                              {s.translationProvider === 'azure'
+                                ? 'Azure Translator'
+                                : s.translationFallback
+                                  ? 'OpenAI fallback'
+                                  : 'OpenAI translation'}
+                            </small>
+                          )}
                           {!s.en && current.id && !preparing && !translationBusy && (
                             <button
                               className="text-action"
