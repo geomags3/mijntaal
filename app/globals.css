@@ -4457,3 +4457,13 @@ textarea::placeholder {
   color: var(--muted);
   font-size: 0.75rem;
 }
+
+.word-suggestions button[aria-selected='true'] {
+  background: var(--surface-selected);
+}
+.word-suggestions .suggestion-provider {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}

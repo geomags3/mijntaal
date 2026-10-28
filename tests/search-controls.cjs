@@ -13,6 +13,10 @@ let slots = [],
   resolveLookup;
 const players = [];
 const requests = [];
+let dictionarySuggestions = [
+  { word: 'als ik u was', meaning: 'if I were you', pos: '' },
+  { word: 'als ik jou was', meaning: 'if I were you', pos: '' },
+];
 const candidates = ['bank', 'oever'].map((lemma) => ({
   found: true,
   lemma,
@@ -148,6 +152,7 @@ vm.runInNewContext(
         return {
           localLookup: () => new Promise((r) => (resolveLookup = r)),
           localCandidates: async () => candidates,
+          suggest: async () => dictionarySuggestions,
         };
       if (name.startsWith('./components/')) return stub(name);
       if (name.includes('search-form'))
@@ -163,6 +168,10 @@ vm.runInNewContext(
     },
   },
 );
+function text(node) {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  return React.Children.toArray(node?.props?.children).map(text).join('');
+}
 function find(node, match) {
   if (!node || typeof node !== 'object') return;
   if (match(node)) return node;
@@ -315,7 +324,7 @@ const render = () => {
   assert.equal(requests.filter((r) => r.url === '/api/lookup').length, 1);
   assert.equal(requests.at(-1).body.sourceLanguage, 'ru');
   assert.equal(requests.at(-1).body.targetLanguage, 'nl');
-  assert.ok(find(app, (n) => n.props?.className === 'translation-provider'));
+  assert.match(text(find(app, (n) => n.props?.className === 'entry-source')), /Translator/);
   await find(app, (n) => label(n, 'Save meaning 1')).props.onClick();
   const savedRussian = requests.filter((r) => r.url === '/api/materials').at(-1).body;
   assert.equal(savedRussian.title, 'Ik ben moe.');
@@ -326,6 +335,174 @@ const render = () => {
     requests.filter((r) => r.url === '/api/lookup').length,
     2,
     'English reference generated only on save',
+  );
+  // The exact Azure translation joins dictionary completions, and keyboard selection reuses it.
+  app = render();
+  find(app, (n) => label(n, 'Search language')).props.onChange({ target: { value: 'nl' } });
+  app = render();
+  find(app, (n) => label(n, 'Search Dutch words or phrases')).props.onChange({
+    target: { value: 'als ik' },
+  });
+  app = render();
+  effects.find((f) => f.toString().includes('setSuggestions(r)'))();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  app = render();
+  const input = () => find(app, (n) => label(n, 'Search Dutch words or phrases'));
+  const options = () =>
+    React.Children.toArray(find(app, (n) => n.props?.role === 'listbox').props.children);
+  let prevented = 0;
+  const key = (key) =>
+    input().props.onKeyDown({
+      key,
+      nativeEvent: {},
+      preventDefault() {
+        prevented++;
+      },
+    });
+  key('ArrowDown');
+  app = render();
+  assert.equal(options()[0].props['aria-selected'], true);
+  const live = find(app, (n) => n.type === stubs.get('./components/live-translation'));
+  const azureEntry = {
+    ...candidates[0],
+    lemma: 'als ik',
+    article: '',
+    partOfSpeech: '',
+    senses: [{ meaning: 'If I', example: '', exampleTranslation: '', usage: '' }],
+    translationProvider: 'azure',
+    originalInput: 'als ik',
+    sourceLanguage: 'nl',
+  };
+  live.props.onResult({
+    key: 'exact-azure',
+    entry: azureEntry,
+    input: 'als ik',
+    language: 'nl',
+    context: '',
+    scope: live.props.scope,
+  });
+  app = render();
+  assert.equal(options()[0].props['aria-label'], 'als ik — If I');
+  assert.match(text(options()[0]), /Translator/);
+  assert.equal(
+    find(app, (n) => n.type === stubs.get('./components/noun-title')).props.title,
+    'als ik',
+    'live result uses the shared result card before selection',
+  );
+  assert.equal(
+    find(app, (n) => n.props?.className === 'live-translation'),
+    undefined,
+    'there is no separate translator card',
+  );
+
+  assert.equal(
+    options()[1].props['aria-selected'],
+    true,
+    'inserting Azure preserves the highlighted dictionary word',
+  );
+  key('ArrowUp');
+  app = render();
+  assert.equal(options()[0].props['aria-selected'], true);
+  assert.equal(input().props['aria-activedescendant'], options()[0].props.id);
+  key('ArrowUp');
+  app = render();
+  assert.equal(options().at(-1).props['aria-selected'], true, 'Up wraps to the last suggestion');
+  key('ArrowDown');
+  app = render();
+  key('Enter');
+  app = render();
+  assert.equal(
+    find(app, (n) => n.props?.role === 'listbox'),
+    undefined,
+  );
+  assert.equal(
+    find(app, (n) => n.type === stubs.get('./components/noun-title')).props.title,
+    'als ik',
+  );
+  assert.equal(
+    requests.filter((r) => r.url === '/api/lookup').length,
+    2,
+    'choosing Azure does not repeat translation or lookup',
+  );
+  // A selected translator result still gains richer dictionary details when they arrive later.
+  effects.find((f) => f.toString().includes('setLiveDictionary'))();
+  resolveLookup({
+    ...azureEntry,
+    translationProvider: undefined,
+    source: 'WikDict',
+    senses: [
+      { meaning: 'Richer matched definition', example: '', exampleTranslation: '', usage: '' },
+    ],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  app = render();
+  assert.match(
+    text(app),
+    /Richer matched definition/,
+    'dictionary upgrades an already selected translation',
+  );
+  input().props.onFocus();
+  app = render();
+  key('Escape');
+  app = render();
+  assert.equal(input().props['aria-expanded'], false);
+  input().props.onFocus();
+  app = render();
+  const beforeComposition = prevented;
+  input().props.onKeyDown({
+    key: 'Enter',
+    nativeEvent: { isComposing: true },
+    preventDefault() {
+      prevented++;
+    },
+  });
+  assert.equal(prevented, beforeComposition + 1, 'IME Enter cannot select a suggestion');
+  input().props.onChange({ target: { value: 'als' } });
+  app = render();
+  assert.equal(
+    find(app, (n) => n.props?.role === 'listbox'),
+    undefined,
+    'old Azure result disappears immediately when input changes',
+  );
+  // Same Dutch spelling prefers dictionary details, regardless of casing or English wording.
+  dictionarySuggestions = [{ word: 'als ik', meaning: 'if I (dictionary detail)', pos: '' }];
+  input().props.onChange({ target: { value: 'ALS IK' } });
+  app = render();
+  effects.find((f) => f.toString().includes('setSuggestions(r)'))();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  app = render();
+  const matchingLive = find(app, (n) => n.type === stubs.get('./components/live-translation'));
+  matchingLive.props.onResult({
+    key: 'match',
+    entry: { ...azureEntry, lemma: 'ALS IK' },
+    input: 'ALS IK',
+    language: 'nl',
+    context: '',
+    scope: matchingLive.props.scope,
+  });
+  app = render();
+  assert.equal(options().length, 1, 'same Dutch text appears once');
+  assert.match(options()[0].props['aria-label'], /dictionary detail/);
+  assert.doesNotMatch(text(options()[0]), /Translator/);
+  const dictionaryEffect = effects.find((f) => f.toString().includes('setLiveDictionary'));
+  const cancelDictionary = dictionaryEffect();
+  resolveLookup({
+    ...azureEntry,
+    translationProvider: undefined,
+    source: 'WikDict',
+    senses: [{ meaning: 'Dictionary detail', example: '', exampleTranslation: '', usage: '' }],
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  app = render();
+  assert.match(text(app), /Dictionary detail/);
+  assert.doesNotMatch(text(app), /Azure translation/);
+  cancelDictionary();
+  input().props.onChange({ target: { value: 'new input' } });
+  app = render();
+  assert.equal(
+    find(app, (n) => n.type === stubs.get('./components/noun-title')),
+    undefined,
+    'previous preview cannot be saved under a new input',
   );
   console.log(
     'PASS: actual Search clear control resets query/context/results, focuses input, rejects stale lookups; Forms open by default, root pronunciation state propagated and repeated loading click cancels.',

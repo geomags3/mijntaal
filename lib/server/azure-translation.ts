@@ -16,9 +16,11 @@ export async function azureTranslate(
   source: TranslationLanguage,
   target: 'nl' | 'en',
   signal?: AbortSignal,
+  loadedCredentials?: Awaited<ReturnType<typeof azureCredentials>>,
 ) {
   throwIfTranslationAborted(signal);
-  const credentials = await azureCredentials(user);
+  const credentials =
+    loadedCredentials === undefined ? await azureCredentials(user) : loadedCredentials;
   throwIfTranslationAborted(signal);
   if (!credentials) return null;
   if ((unavailable.get(credentials.scope) || 0) > Date.now())

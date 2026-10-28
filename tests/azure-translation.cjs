@@ -12,6 +12,11 @@ let azureCalls = 0,
   mode = 'ok',
   counter = 0,
   onAzure;
+let credentialReads = 0;
+const limits = [];
+let holdCacheWrite = false,
+  releaseCacheWrite,
+  rejectCacheWrite = false;
 let configured = true,
   aiConfigured = true;
 let sourceBody = {
@@ -26,7 +31,9 @@ const common = {
     }
   },
   hash: async (s) => createHash('sha256').update(s).digest('hex'),
-  limit: async () => {},
+  limit: async (user, kind, count) => {
+    limits.push({ user, kind, count });
+  },
   db: () => ({
     prepare(sql) {
       let args;
@@ -49,6 +56,11 @@ const common = {
         },
         async run() {
           if (sql.includes('INSERT INTO lookup_cache')) {
+            if (rejectCacheWrite) throw Error('Synthetic optional cache outage');
+            if (holdCacheWrite)
+              await new Promise((resolve) => {
+                releaseCacheWrite = resolve;
+              });
             const [id, owner, body] = args;
             rows.set([id, owner].join('|'), { id, body });
           }
@@ -89,8 +101,12 @@ const azureSettings = {
     region: 'westeurope',
     scope: `${user}-${counter}`,
   }),
-  azureCredentials: async (user) =>
-    configured ? { key: 'synthetic', region: 'westeurope', scope: `${user}-${counter}` } : null,
+  azureCredentials: async (user) => {
+    credentialReads++;
+    return configured
+      ? { key: 'synthetic', region: 'westeurope', scope: `${user}-${counter}` }
+      : null;
+  },
 };
 async function fakeFetch(url, options) {
   azureCalls++;
@@ -155,6 +171,12 @@ function load(relative) {
   assert.equal(result.lemma, 'De bank.');
   assert.equal(result.senses[0].meaning, 'The bank.');
   assert.equal(aiCalls, 0);
+  assert.equal(credentialReads, 1, 'loads Azure credentials only once per request');
+  assert.equal(
+    limits.find((l) => l.kind === 'plain-translation').count,
+    120,
+    'live typing has its own usable quota',
+  );
   await translate('alice', 'De bank.');
   assert.equal(azureCalls, 1);
   await translate('bob', 'De bank.');
@@ -180,11 +202,61 @@ function load(relative) {
   await assert.rejects(() => translate('alice', '', '', undefined, 'en', 'nl'));
   await assert.rejects(() => translate('alice', 'Hello', '', undefined, 'xx', 'nl'));
   assert.equal(azureCalls, beforeInvalid);
+  // Optional cache persistence is registered with the request lifecycle and never blocks the result.
+  const background = [];
+  holdCacheWrite = true;
+  const timed = {};
+  result = await Promise.race([
+    translate('alice', 'Deferred cache', '', undefined, 'nl', 'en', {
+      live: true,
+      defer: (task) => background.push(task),
+      timing: timed,
+    }),
+    new Promise((_resolve, reject) =>
+      setTimeout(() => reject(Error('cache write blocked result')), 500),
+    ),
+  ]);
+  assert.equal(result.translationProvider, 'azure');
+  assert.equal(background.length, 1);
+  assert.ok(Number.isFinite(timed.setup));
+  assert.ok(Number.isFinite(timed.azure));
+  holdCacheWrite = false;
+  releaseCacheWrite();
+  await Promise.all(background);
+  const beforeDeferredHit = azureCalls;
+  await translate('alice', 'Deferred cache');
+  assert.equal(azureCalls, beforeDeferredHit, 'deferred cache remains reusable');
+  rejectCacheWrite = true;
+  result = await translate('alice', 'Cache unavailable');
+  assert.equal(
+    result.translationProvider,
+    'azure',
+    'optional cache failures do not discard translations',
+  );
+  rejectCacheWrite = false;
   mode = 'malformed';
+  const beforeLiveFailure = aiCalls;
+  await assert.rejects(
+    () => translate('alice', 'Live provider failure', '', undefined, 'nl', 'en', { live: true }),
+    /Press Search/,
+  );
+  assert.equal(aiCalls, beforeLiveFailure, 'typing never starts paid AI fallback');
+  configured = false;
+  await assert.rejects(
+    () => translate('alice', 'Live without Azure', '', undefined, 'nl', 'en', { live: true }),
+    /Press Search/,
+  );
+  assert.equal(aiCalls, beforeLiveFailure, 'missing Azure key never starts automatic AI');
+  configured = true;
   counter++;
   result = await translate('alice', 'Malformed');
   assert.equal(result.translationProvider, 'openai');
   assert.equal(result.translationFallback, true);
+  assert.equal(
+    limits.find((l) => l.kind === 'translation-ai').count,
+    20,
+    'paid AI fallback stays separately bounded',
+  );
   mode = 'ok';
   result = await translate('alice', 'Malformed');
   assert.equal(result.translationProvider, 'azure', 'AI fallback never poisons Azure cache');
@@ -260,7 +332,7 @@ function load(relative) {
     'stale translation not stored',
   );
   console.log(
-    'PASS: Azure-first translations, direction validation, owner/config caches, malformed/error fallback, throttling cooldown, cancellation, Azure-only text batches, saved progress and stale-text safety. Providers mocked.',
+    'PASS: Azure-first translations, live typing without paid AI, one credential read, deferred optional cache writes, separate quotas, owner/config caches, fallback, cooldown, cancellation, saved text progress and stale-text safety. Providers mocked.',
   );
 })().catch((e) => {
   console.error(e);

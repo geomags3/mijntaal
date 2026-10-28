@@ -30,6 +30,7 @@ import BackupControls from './components/backup-controls';
 import AzureSettings from './components/azure-settings';
 import CollectionDetails from './components/collection-details';
 import LearningProgress from './components/learning-progress';
+import LiveTranslation, { type LiveTranslationResult } from './components/live-translation';
 import NounTitle from './components/noun-title';
 import Practice from './components/practice';
 import PracticeBadge from './components/practice-badge';
@@ -113,7 +114,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
   const [tab, setTab] = useState(initialTab),
     [query, setQuery] = useState(''),
     [context, setContext] = useState(''),
-    [entry, setEntry] = useState<Entry | null>(null),
+    [selectedEntry, setEntry] = useState<Entry | null>(null),
     [searching, setSearching] = useState(false),
     [error, setError] = useState(''),
     [items, setItems] = useState<Material[]>(
@@ -169,6 +170,112 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
   const [azureRegion, setAzureRegion] = useState('');
   const [azureError, setAzureError] = useState('');
   const [userScope, setUserScope] = useState('');
+  const [composing, setComposing] = useState(false);
+  const [azureRevision, setAzureRevision] = useState(0);
+  const [liveSuggestion, setLiveSuggestion] = useState<LiveTranslationResult | null>(null);
+  const [activeSuggestion, setActiveSuggestion] = useState<string | null>(null);
+  const currentLiveSuggestion =
+    azureConfigured &&
+    settings.aiEnrichment !== 'off' &&
+    !composing &&
+    liveSuggestion?.input === query.trim().normalize('NFC') &&
+    liveSuggestion.language === searchLanguage &&
+    liveSuggestion.context === context &&
+    liveSuggestion.scope === userScope + ':' + azureRevision
+      ? liveSuggestion
+      : null;
+  const [liveDictionary, setLiveDictionary] = useState<{
+    result: LiveTranslationResult;
+    entry: Entry;
+  } | null>(null);
+  useEffect(() => {
+    if (!currentLiveSuggestion) return;
+    let current = true;
+    const result = currentLiveSuggestion;
+    void localLookup(searchLanguage === 'nl' ? result.input : result.entry.lemma)
+      .then((dictionary) => {
+        if (current && dictionary.found)
+          setLiveDictionary({
+            result,
+            entry: {
+              ...dictionary,
+              originalInput: result.input,
+              sourceLanguage: result.language,
+            },
+          });
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [currentLiveSuggestion, searchLanguage]);
+  const matchingLiveDictionary =
+    liveDictionary?.result === currentLiveSuggestion ? liveDictionary?.entry : null;
+  const entry =
+    selectedEntry === currentLiveSuggestion?.entry && matchingLiveDictionary
+      ? matchingLiveDictionary
+      : selectedEntry ||
+        (!searching && currentLiveSuggestion
+          ? matchingLiveDictionary || currentLiveSuggestion.entry
+          : null);
+  const normalizeSuggestion = (value: string) =>
+    value.trim().normalize('NFC').toLocaleLowerCase('nl');
+  const matchingDictionarySuggestion =
+    currentLiveSuggestion &&
+    suggestions.some(
+      (suggestion) =>
+        normalizeSuggestion(suggestion.word) === normalizeSuggestion(currentLiveSuggestion.input) &&
+        (searchLanguage === 'nl' ||
+          normalizeSuggestion(suggestion.meaning) ===
+            normalizeSuggestion(currentLiveSuggestion.entry.lemma)),
+    );
+  const searchOptions = [
+    ...(currentLiveSuggestion && !matchingDictionarySuggestion
+      ? [
+          {
+            id: 'azure:' + currentLiveSuggestion.key,
+            word: currentLiveSuggestion.input,
+            meaning:
+              searchLanguage === 'nl'
+                ? currentLiveSuggestion.entry.senses[0]?.meaning || ''
+                : currentLiveSuggestion.entry.lemma,
+            entry: currentLiveSuggestion.entry,
+            azure: true,
+          },
+        ]
+      : []),
+    ...suggestions.map((suggestion) => ({
+      ...suggestion,
+      id: 'dictionary:' + searchLanguage + ':' + suggestion.word,
+      entry: undefined as Entry | undefined,
+      azure: false,
+    })),
+  ];
+  const activeSuggestionIndex = searchOptions.findIndex((option) => option.id === activeSuggestion);
+  function chooseSuggestion(option: (typeof searchOptions)[number]) {
+    setActiveSuggestion(null);
+    setSuggestOpen(false);
+    if (!option.entry) {
+      void search(option.word);
+      return;
+    }
+    formRequest.current?.abort();
+    aiController.current?.abort();
+    ++searchGeneration.current;
+    engine.current?.stop();
+    setEntry(
+      liveDictionary?.result === currentLiveSuggestion ? liveDictionary.entry : option.entry,
+    );
+    setAiEntry(null);
+    setAiBusy(false);
+    setFormTranslation(null);
+    setFormBusy(false);
+    setSearching(false);
+    setTranslating(false);
+    setTranslationError('');
+    setError('');
+    setCandidates([]);
+  }
   const translationReady = keyConfigured || azureConfigured;
   const searchLabel =
     searchLanguage === 'nl'
@@ -258,7 +365,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       try {
         sessionStorage.setItem(
           'dutch-search-view',
-          JSON.stringify({ query, context, entry, formTranslation, searchLanguage }),
+          JSON.stringify({ query, context, entry: selectedEntry, formTranslation, searchLanguage }),
         );
       } catch {}
     };
@@ -267,7 +374,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
       save();
       window.removeEventListener('pagehide', save);
     };
-  }, [query, context, entry, formTranslation, searchLanguage]);
+  }, [query, context, selectedEntry, formTranslation, searchLanguage]);
   useEffect(() => {
     if (!mainVisited.current) return;
     void load(false);
@@ -552,6 +659,8 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     engine.current?.stop();
     setQuery('');
     setContext('');
+    setLiveSuggestion(null);
+    setActiveSuggestion(null);
     setCandidates([]);
     setEntry(null);
     setAiEntry(null);
@@ -782,7 +891,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 className="dictionary-search"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (query.trim()) search();
+                  if (query.trim() && !composing) search();
                 }}
               >
                 <Search size={22} />
@@ -798,9 +907,48 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   }
                   value={query}
                   maxLength={240}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={suggestOpen && searchOptions.length > 0}
+                  aria-controls={
+                    suggestOpen && searchOptions.length > 0 ? 'search-suggestions' : undefined
+                  }
+                  aria-activedescendant={
+                    suggestOpen && activeSuggestionIndex >= 0
+                      ? 'search-option-' + activeSuggestionIndex
+                      : undefined
+                  }
                   onFocus={() => setSuggestOpen(true)}
+                  onCompositionStart={() => setComposing(true)}
+                  onCompositionEnd={() => setComposing(false)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Escape') setSuggestOpen(false);
+                    if (composing || e.nativeEvent?.isComposing) {
+                      if (e.key === 'Enter') e.preventDefault();
+                      return;
+                    }
+                    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchOptions.length) {
+                      e.preventDefault();
+                      const next =
+                        !suggestOpen || activeSuggestionIndex < 0
+                          ? e.key === 'ArrowDown'
+                            ? 0
+                            : searchOptions.length - 1
+                          : (activeSuggestionIndex +
+                              (e.key === 'ArrowDown' ? 1 : -1) +
+                              searchOptions.length) %
+                            searchOptions.length;
+                      setSuggestOpen(true);
+                      setActiveSuggestion(searchOptions[next].id);
+                      searchInput.current?.ownerDocument
+                        ?.getElementById('search-option-' + next)
+                        ?.scrollIntoView?.({ block: 'nearest' });
+                    } else if (e.key === 'Enter' && suggestOpen && activeSuggestionIndex >= 0) {
+                      e.preventDefault();
+                      chooseSuggestion(searchOptions[activeSuggestionIndex]);
+                    } else if (e.key === 'Escape') {
+                      setSuggestOpen(false);
+                      setActiveSuggestion(null);
+                    }
                   }}
                   onChange={(e) => {
                     formRequest.current?.abort();
@@ -808,6 +956,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     setFormBusy(false);
                     setFormError('');
                     setQuery(e.target.value);
+                    setActiveSuggestion(null);
                     setSuggestOpen(true);
                     setSuggestions([]);
                     ++searchGeneration.current;
@@ -843,17 +992,29 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   )}
                 </button>
               </form>
-              {suggestOpen && suggestions.length > 0 && (
-                <div className="word-suggestions" aria-label="Suggested Dutch words">
-                  {suggestions.map((x) => (
+              {suggestOpen && searchOptions.length > 0 && (
+                <div
+                  id="search-suggestions"
+                  role="listbox"
+                  className="word-suggestions"
+                  aria-label="Translation and dictionary suggestions"
+                >
+                  {searchOptions.map((x, i) => (
                     <button
-                      key={x.word}
+                      key={x.id}
+                      id={'search-option-' + i}
+                      role="option"
+                      aria-selected={x.id === activeSuggestion}
+                      tabIndex={-1}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setActiveSuggestion(x.id)}
                       aria-label={x.word + ' — ' + x.meaning}
                       type="button"
-                      onClick={() => search(x.word)}
+                      onClick={() => chooseSuggestion(x)}
                     >
-                      <b lang="nl">{x.word}</b>
-                      <span>{x.meaning}</span>
+                      <b lang={searchLanguage}>{x.word}</b>
+                      <span lang={searchLanguage === 'nl' ? 'en' : 'nl'}>{x.meaning}</span>
+                      {x.azure && <small className="suggestion-provider">Translator</small>}
                     </button>
                   ))}
                 </div>
@@ -874,10 +1035,36 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     setFormTranslation(null);
                     setFormBusy(false);
                     setFormError('');
+                    aiController.current?.abort();
+                    ++searchGeneration.current;
+                    setSearching(false);
+                    setTranslating(false);
+                    setAiBusy(false);
+                    setEntry(null);
+                    setAiEntry(null);
                     setContext(e.target.value);
                   }}
                 />
               </details>
+              <LiveTranslation
+                key={userScope + ':' + azureRevision}
+                scope={userScope + ':' + azureRevision}
+                onResult={setLiveSuggestion}
+                inSuggestions={suggestOpen && !!currentLiveSuggestion}
+                query={query}
+                context={context}
+                language={searchLanguage}
+                enabled={azureConfigured && settings.aiEnrichment !== 'off'}
+                paused={composing || searching || translating}
+                coveredBySearch={
+                  !!selectedEntry?.translationProvider &&
+                  selectedEntry.originalInput === query.trim().normalize('NFC') &&
+                  selectedEntry.sourceLanguage === searchLanguage
+                }
+                onSearch={() => {
+                  void search();
+                }}
+              />
               {!translationReady && !connectionError && (
                 <div className="connect-prompt">
                   <KeyRound size={16} />
@@ -1037,15 +1224,6 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                     </p>
                   ) : (
                     <>
-                      {entry.translationProvider && (
-                        <p className="translation-provider" role="status">
-                          {entry.translationProvider === 'azure'
-                            ? 'Azure Translator'
-                            : entry.translationFallback
-                              ? 'OpenAI fallback · Azure unavailable'
-                              : 'OpenAI translation'}
-                        </p>
-                      )}
                       {entry.originalInput && searchLanguage !== 'nl' && (
                         <p className="translation-original" lang={entry.sourceLanguage}>
                           {entry.originalInput}
@@ -1159,7 +1337,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                   {entry.found && (
                     <footer className="entry-source">
                       <span>
-                        {entry.source}
+                        {entry.translationProvider ? 'Translator' : entry.source}
                         {entry.cached ? ' · cached' : ''}
                       </span>
                       {entry.sourceUrl && (
@@ -1431,6 +1609,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 error={azureError}
                 region={azureRegion}
                 onChanged={() => {
+                  setAzureRevision((revision) => revision + 1);
                   void load(true);
                 }}
               />

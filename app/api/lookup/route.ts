@@ -1,7 +1,19 @@
+import { waitUntil } from 'cloudflare:workers';
 import { body, fail, json, mutation, owner } from '../../../lib/server/common';
 import { entrySchema, lookup } from '../../../lib/server/dictionary';
 import { translate, translateSelectedForm } from '../../../lib/server/translation';
 export async function POST(r: Request) {
+  const started = Date.now();
+  const timing: Record<string, number> = {};
+  const timed = (response: Response) => {
+    response.headers.set(
+      'Server-Timing',
+      [...Object.entries(timing), ['total', Date.now() - started]]
+        .map(([name, duration]) => `${name};dur=${duration}`)
+        .join(', '),
+    );
+    return response;
+  };
   try {
     mutation(r);
     const user = owner(r),
@@ -28,14 +40,21 @@ export async function POST(r: Request) {
         ),
       );
     if (b.mode === 'translate')
-      return json(
-        await translate(
-          user,
-          typeof b.query === 'string' ? b.query : '',
-          typeof b.context === 'string' ? b.context : '',
-          r.signal,
-          b.sourceLanguage === undefined ? 'nl' : b.sourceLanguage,
-          b.targetLanguage,
+      return timed(
+        json(
+          await translate(
+            user,
+            typeof b.query === 'string' ? b.query : '',
+            typeof b.context === 'string' ? b.context : '',
+            r.signal,
+            b.sourceLanguage === undefined ? 'nl' : b.sourceLanguage,
+            b.targetLanguage,
+            {
+              live: b.live === true,
+              timing,
+              ...(typeof waitUntil === 'function' ? { defer: waitUntil } : {}),
+            },
+          ),
         ),
       );
     return json(
@@ -48,6 +67,6 @@ export async function POST(r: Request) {
       ),
     );
   } catch (e) {
-    return fail(e);
+    return timed(fail(e));
   }
 }

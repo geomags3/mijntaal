@@ -11,6 +11,7 @@ Collect Dutch words and texts, listen to recordings, and practise the material y
 - A bundled Dutch ↔ English dictionary combining Kaikki learner details and WikDict translations, with source attribution.
 - Azure-first phrase and text translations, with optional OpenAI fallback; AI grammar and contextual word explanations.
 - English or Russian → Dutch phrase translation, with pronunciation and collection saving.
+- Live Azure translation after a 500 ms typing pause, with dictionary and translator results in one card. Matching dictionary entries take priority; Search/Enter retains optional AI fallback.
 - A personal collection with text editing, archive, import and export.
 - Words practice and sentence practice with progress saved to your account.
 - ElevenLabs pronunciation and connected text recordings with sentence highlighting.

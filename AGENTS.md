@@ -18,7 +18,7 @@ Read [README.md](README.md) for setup, [docs/PROJECT_STRUCTURE.md](docs/PROJECT_
 - `app/page.tsx` coordinates Search, Collection, Practice and Settings. `app/texts/page.tsx` selects Texts in the same application; avoid duplicating the app.
 - `app/components/` contains feature UI; `app/globals.css` contains shared styling and responsive rules.
 - `app/api/*/route.ts` and `app/mcp/route.ts` share `lib/server/` services. Keep browser and MCP validation and ownership rules consistent.
-- Plain phrase/sentence translation tries Azure first, with OpenAI fallback when configured. Grammar and dictionary enrichment remain on OpenAI; keep provider readiness and caches separate.
+- Plain phrase/sentence translation tries Azure first. Live typing previews use Azure only after a 500 ms pause; submitted searches allow OpenAI fallback. Grammar and dictionary enrichment remain on OpenAI. Keep provider readiness, quotas and caches separate; preserve request cancellation and stale-response guards.
 - `lib/` holds dictionary, learning, journaling and audio logic; `db/schema.ts` and `drizzle/` define persisted data. Sites binds D1 as `DB` and R2 as `BUCKET`.
 
 ## Local setup and checks

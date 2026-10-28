@@ -274,3 +274,11 @@ There is no automatic two-way synchronization between a deployed Site and this l
 | Deployment behavior                       | `scripts/stage-sites.mjs`, `docs/SITES.md`, local hosting configuration and installed Sites tooling. |
 
 Reading this guide or passing local checks does not establish that any particular hosted installation or paid provider connection has been verified.
+
+## Live translation
+
+[LiveTranslation](../app/components/live-translation.tsx) debounces typing by 500 ms and sends Azure-only `live: true` requests independently of local dictionary lookup. It cancels obsolete requests and rejects late responses. The page renders current results in the shared dictionary/translation card, preferring bundled dictionary details for matching Dutch text and omitting duplicate translator suggestions. Changing the input hides the previous preview immediately. Input composition pauses requests. Search/Enter continues to load dictionary details and allows configured OpenAI fallback. Off in the existing automatic-explanations setting also disables live translation.
+
+The plain translation service loads owner-scoped Azure credentials once per request, reads independent settings concurrently and passes credentials directly to the adapter. It limits uncached plain requests to 120 per minute, with a separate 20-per-minute limit for uncached AI fallback. The lookup route uses Cloudflare `waitUntil` for nonessential cache writes and emits text-free `Server-Timing` durations for setup, provider and total time; those timings do not include browser-to-server transit or the typing debounce. Grammar calls retain their existing quotas and provider behavior.
+
+Search exposes current Azure translations as the first autocomplete option alongside dictionary completions. Up/Down navigates the accessible combobox, Enter selects the active option and Escape dismisses it. Selecting the Azure option reuses its result without another provider request. Suggestions from older input, context, language or account configuration are excluded.
