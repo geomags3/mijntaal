@@ -39,6 +39,7 @@ import PracticeModeSelect from './components/practice-mode-select';
 import SentencesSettings from './components/sentences-settings';
 import SpeechSettings from './components/speech-settings';
 import TextsReader from './components/texts-reader';
+import Lessons from './components/lessons';
 import WordForms from './components/word-forms';
 import WordsSettings from './components/words-settings';
 type Material = {
@@ -110,6 +111,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
   );
   const [practiceVisited, setPracticeVisited] = useState(false),
     [textsVisited, setTextsVisited] = useState(initialTab === 'Texts');
+  const [lessonsVisited, setLessonsVisited] = useState(initialTab === 'Lessons');
   const textsUrl = useRef('/texts'),
     mainVisited = useRef(initialTab !== 'Texts');
   const [tab, setTab] = useState(initialTab),
@@ -327,7 +329,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
 
   useEffect(() => {
     const selected = new URLSearchParams(window.location.search).get('tab');
-    if (selected && ['Search', 'Collection', 'Practice', 'Settings'].includes(selected))
+    if (selected && ['Search', 'Collection', 'Practice', 'Lessons', 'Settings'].includes(selected))
       setTab(selected);
     try {
       const saved = JSON.parse(sessionStorage.getItem('dutch-search-view') || 'null');
@@ -390,6 +392,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
   }, [tab]);
   useEffect(() => {
     if (tab === 'Practice') setPracticeVisited(true);
+    if (tab === 'Lessons') setLessonsVisited(true);
   }, [tab]);
   useEffect(() => {
     const refresh = () => {
@@ -1593,6 +1596,11 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                 audioReady={audioConfigured}
                 audioScope={audioScope}
               />
+            </div>
+          )}
+          {(lessonsVisited || tab === 'Lessons') && (
+            <div hidden={tab !== 'Lessons'}>
+              <Lessons visible={tab === 'Lessons'} />
             </div>
           )}
           {tab === 'Settings' && (

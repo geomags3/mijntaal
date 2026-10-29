@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 export const materials = sqliteTable('materials', {
   id: text('id').primaryKey(),
   owner: text('owner').notNull(),
@@ -54,3 +54,57 @@ export const wordsSessions = sqliteTable('words_sessions', {
   body: text('body').notNull(),
   updated: text('updated').notNull(),
 });
+export const lessonPrograms = sqliteTable(
+  'lesson_programs',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    body: text('body').notNull(),
+    version: integer('version').notNull().default(1),
+    archived: integer('archived').notNull().default(0),
+    created: text('created').notNull(),
+    updated: text('updated').notNull(),
+  },
+  (t) => [index('lesson_programs_owner').on(t.owner, t.archived)],
+);
+export const lessons = sqliteTable(
+  'lessons',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    body: text('body').notNull(),
+    version: integer('version').notNull().default(1),
+    archived: integer('archived').notNull().default(0),
+    programId: text('program_id'),
+    topicId: text('topic_id'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    created: text('created').notNull(),
+    updated: text('updated').notNull(),
+  },
+  (t) => [index('lessons_owner_program').on(t.owner, t.archived, t.programId, t.sortOrder)],
+);
+export const lessonProgress = sqliteTable(
+  'lesson_progress',
+  {
+    lessonId: text('lesson_id').notNull(),
+    owner: text('owner').notNull(),
+    revision: integer('revision').notNull(),
+    body: text('body').notNull(),
+    updated: text('updated').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.lessonId, t.owner] })],
+);
+export const lessonRuns = sqliteTable(
+  'lesson_runs',
+  {
+    id: text('id').primaryKey(),
+    lessonId: text('lesson_id').notNull(),
+    owner: text('owner').notNull(),
+    lessonVersion: integer('lesson_version').notNull(),
+    body: text('body').notNull(),
+    completed: text('completed').notNull(),
+    correct: integer('correct').notNull(),
+    total: integer('total').notNull(),
+  },
+  (t) => [index('lesson_runs_owner_lesson').on(t.owner, t.lessonId)],
+);

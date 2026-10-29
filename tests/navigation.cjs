@@ -97,7 +97,7 @@ texts.props.onClick({
 });
 assert.equal(prevented, true);
 assert.equal(destinations.at(-1), 'Texts');
-for (const name of ['Search', 'Collection', 'Practice']) {
+for (const name of ['Search', 'Collection', 'Lessons', 'Practice']) {
   const link = all.find((x) => x.props.href === '/?tab=' + name && !x.props['aria-label']);
   link.props.onClick({ preventDefault() {} });
   assert.equal(destinations.at(-1), name);
@@ -311,3 +311,14 @@ assert.equal(
 console.log(
   'PASS: real App opens Texts, returns to Collection, retains the reader across toggles, and supports the direct Texts route.',
 );
+slots = [];
+app = render({ initialTab: 'Lessons' });
+assert.equal(find(app, (n) => n.type === stubs.get('./components/lessons')).props.visible, true);
+nav()('Search');
+app = render();
+assert.equal(find(app, (n) => n.type === stubs.get('./components/lessons')).props.visible, false);
+nav()('Lessons');
+app = render();
+assert.equal(location.search, '?tab=Lessons');
+assert.equal(find(app, (n) => n.type === stubs.get('./components/lessons')).props.visible, true);
+console.log('PASS: Lessons has a real destination and retains its mounted view across navigation.');

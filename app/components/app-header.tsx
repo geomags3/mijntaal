@@ -4,6 +4,7 @@ import {
   BookOpen,
   ChevronLeft,
   GraduationCap,
+  Library,
   Search,
   Settings,
   Triangle,
@@ -18,6 +19,7 @@ const sections = [
   { name: 'Collection', href: '/?tab=Collection', Icon: Bookmark },
   { name: 'Texts', href: '/texts', Icon: BookOpen },
   { name: 'Practice', href: '/?tab=Practice', Icon: GraduationCap },
+  { name: 'Lessons', href: '/?tab=Lessons', Icon: Library },
 ];
 function warm(name: string) {
   const path =

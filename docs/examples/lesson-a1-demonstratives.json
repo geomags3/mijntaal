@@ -1,0 +1,216 @@
+{
+  "content": {
+    "title": "Dit, deze, die, dat · A1",
+    "description": "Learn this, that, these and those with clear near/far examples, de/het rules, plural nouns and interactive practice.",
+    "goal": "Choose `dit`, `deze`, `die` or `dat` before a noun, and recognise the neutral `Dit is …` introduction pattern.",
+    "level": "A1",
+    "minutes": 15,
+    "blocks": [
+      {
+        "id": "intro",
+        "type": "explanation",
+        "heading": "Four small words, two simple decisions",
+        "text": "`dit`, `deze`, `die` and `dat` help you point things out.\n\n- **Near you:** this / these → `dit` or `deze`.\n- **Further away:** that / those → `dat` or `die`.\n\nThe correct form also depends on the noun: **singular de-word**, **singular het-word**, or **plural**. We will practise forms directly before a noun first."
+      },
+      {
+        "id": "overview",
+        "type": "table",
+        "caption": "Pointing words directly before a noun",
+        "columns": ["Noun group", "Near: this / these", "Far: that / those"],
+        "rows": [
+          ["Singular de-word", "deze fiets", "die fiets"],
+          ["Singular het-word", "dit boek", "dat boek"],
+          ["Any plural", "deze boeken", "die boeken"]
+        ]
+      },
+      {
+        "id": "near-de",
+        "type": "choice",
+        "prompt": "The bicycle is **next to you**. Its article is `de`: **de fiets**. Choose **this bicycle**.",
+        "options": ["deze fiets", "dit fiets", "die fiets", "dat fiets"],
+        "correct": 0,
+        "hint": "Near + singular de-word → deze.",
+        "explanation": "**This bicycle** is `deze fiets`. Use **deze** with a singular `de`-word when pointing to something near you. `Die fiets` means **that bicycle** in this near/far contrast."
+      },
+      {
+        "id": "near-het",
+        "type": "gap",
+        "prompt": "The book is **here beside you**. The article is `het`. Choose **this**.",
+        "sentence": "___ boek hier is van mij.",
+        "answers": ["Dit"],
+        "options": ["Dit", "Dat", "Deze", "Die"],
+        "hint": "Near + singular het-word → dit.",
+        "explanation": "`Dit boek hier is van mij.` — **This book here is mine.**\n\n`Boek` is a singular **het-word**, so near you it takes `dit`. The pointing word replaces the article: say `dit boek`, not dit het boek."
+      },
+      {
+        "id": "far-rule",
+        "type": "explanation",
+        "heading": "Now point further away",
+        "text": "For a clear near/far contrast:\n\n- **de fiets** → `die fiets` — *that bicycle*.\n- **het huis** → `dat huis` — *that house*.\n\n> **Die fiets daar is rood.**\n> *That bicycle over there is red.*\n\n`Daar` means **there**. It helps make the distance clear in the following exercises."
+      },
+      {
+        "id": "match-four",
+        "type": "match",
+        "prompt": "Match each noun and distance with the correct Dutch phrase.",
+        "pairs": [
+          {
+            "left": "de fiets · near",
+            "right": "deze fiets"
+          },
+          {
+            "left": "het boek · near",
+            "right": "dit boek"
+          },
+          {
+            "left": "de fiets · far",
+            "right": "die fiets"
+          },
+          {
+            "left": "het boek · far",
+            "right": "dat boek"
+          }
+        ],
+        "hint": "For de: deze / die. For het: dit / dat.",
+        "explanation": "- Near + **de** → `deze fiets`.\n- Near + **het** → `dit boek`.\n- Far + **de** → `die fiets`.\n- Far + **het** → `dat boek`."
+      },
+      {
+        "id": "decision",
+        "type": "diagram",
+        "caption": "How to choose before a noun",
+        "steps": [
+          "Is the noun plural? → deze near / die far.",
+          "If singular: is its article de or het?",
+          "de → deze near / die far.",
+          "het → dit near / dat far."
+        ]
+      },
+      {
+        "id": "far-de",
+        "type": "gap",
+        "prompt": "Point at **that bicycle over there**. Remember: `de fiets`.",
+        "sentence": "___ fiets daar is rood.",
+        "answers": ["Die"],
+        "options": ["Deze", "Dit", "Die", "Dat"],
+        "hint": "Far + singular de-word → die.",
+        "explanation": "`Die fiets daar is rood.` — **That bicycle over there is red.**\n\nThe bicycle is further away, and `fiets` uses **de**, so choose `die`."
+      },
+      {
+        "id": "far-het",
+        "type": "gap",
+        "prompt": "Point at **that house over there**. Remember: `het huis`. Type one word.",
+        "sentence": "___ huis daar is groot.",
+        "answers": ["Dat"],
+        "hint": "Far + singular het-word → dat.",
+        "explanation": "`Dat huis daar is groot.` — **That house over there is big.**\n\n`Huis` is a singular **het-word**. Further away, it takes `dat`."
+      },
+      {
+        "id": "plural-rule",
+        "type": "explanation",
+        "heading": "Plural nouns make the choice easier",
+        "text": "With **any plural noun**, use:\n\n- `deze` for **these**: `deze fietsen`, `deze boeken`.\n- `die` for **those**: `die fietsen`, `die boeken`.\n\nEven though the singular is **het boek**, its plural is **de boeken**. That is why **these books** is `deze boeken`.\n\nFor forms directly before plural nouns, do not use `dit` or `dat`."
+      },
+      {
+        "id": "plural-near",
+        "type": "choice",
+        "prompt": "Several books are **here in your hands**. Choose **these books**. Singular: `het boek`; plural: `de boeken`.",
+        "options": ["dit boeken", "deze boeken", "dat boeken", "die boeken"],
+        "correct": 1,
+        "hint": "Plural + near → deze.",
+        "explanation": "**These books** is `deze boeken`. The noun is plural, so the singular article **het** no longer determines the form. `Die boeken` means **those books** in this near/far contrast."
+      },
+      {
+        "id": "plural-far-words",
+        "type": "words",
+        "prompt": "Build **Those books are expensive**. The books are further away. Start with `Die`.",
+        "tokens": ["Die", "boeken", "zijn", "duur"],
+        "answers": ["Die boeken zijn duur"],
+        "hint": "Plural + far → die. Put zijn after the subject phrase.",
+        "explanation": "`Die boeken zijn duur.` — **Those books are expensive.**\n\n`Die boeken` is the subject phrase. The plural noun takes `die` when you point further away; the plural verb is `zijn`."
+      },
+      {
+        "id": "near-het-card",
+        "type": "flashcard",
+        "prompt": "Recall the one word for **this**, directly before a **singular het-word** near you.",
+        "answer": "dit",
+        "hint": "Think: het boek → dit boek.",
+        "explanation": "Use `dit`: **dit boek**, **dit huis**. Reveal the card and self-assess whether you recalled the word; this is not an automatically graded answer."
+      },
+      {
+        "id": "far-het-letters",
+        "type": "letters",
+        "prompt": "Build the one word for **that**, directly before a **singular het-word** further away.",
+        "tokens": ["d", "a", "t"],
+        "answers": ["dat"],
+        "hint": "Think: het huis → dat huis.",
+        "explanation": "Use `dat`: **dat huis**, **dat boek**. The form depends on both distance and the singular noun group."
+      },
+      {
+        "id": "plural-near-typed",
+        "type": "gap",
+        "prompt": "Complete **These bicycles here are new**. The bicycles are next to you. Type one word.",
+        "sentence": "___ fietsen hier zijn nieuw.",
+        "answers": ["Deze"],
+        "hint": "Any plural noun near you takes deze.",
+        "explanation": "`Deze fietsen hier zijn nieuw.` — **These bicycles here are new.**\n\n`Fietsen` is plural, and `hier` makes the near context clear: choose `deze`."
+      },
+      {
+        "id": "near-het-in-sentence",
+        "type": "gap",
+        "prompt": "You are reading **this book here** in your hands. Remember: `het boek`.",
+        "sentence": "Ik lees ___ boek hier.",
+        "answers": ["dit"],
+        "hint": "The noun boek is a singular het-word and is near you.",
+        "explanation": "`Ik lees dit boek hier.` — **I am reading this book here.**\n\n`Dit` directly precedes **boek**, a singular **het-word**."
+      },
+      {
+        "id": "standalone-rule",
+        "type": "explanation",
+        "heading": "A useful difference: deze fiets, but Dit is mijn fiets",
+        "text": "Compare two patterns:\n\n> **Deze fiets is nieuw.**\n> *This bicycle is new.*\n\nHere `deze` is **directly before** the noun `fiets`, a de-word.\n\n> **Dit is mijn fiets.**\n> *This is my bicycle.*\n\nHere `dit` **stands on its own** in a neutral introduction. The noun comes later, after `is`. Do not mechanically change `dit` to `deze` just because that later noun uses **de**.\n\nThe matching neutral pattern for something further away is **Dat is mijn fiets.**"
+      },
+      {
+        "id": "standalone-choice",
+        "type": "choice",
+        "prompt": "Use the **neutral introduction pattern** just explained for a bicycle **beside you**: **This is my bicycle.** Choose the missing word before `is`.",
+        "options": ["Dit", "Deze", "Die", "Dat"],
+        "correct": 0,
+        "hint": "The pattern is Dit is …; the pointing word is not directly before fiets.",
+        "explanation": "Use **Dit is mijn fiets.** for this neutral introduction.\n\nThis task tests the `Dit is …` pattern, rather than a pointing word directly before a noun. Other independent pointing words can occur in other contexts; the basic pattern here is `Dit is …`."
+      },
+      {
+        "id": "standalone-words",
+        "type": "words",
+        "prompt": "Build **This is my book** using the neutral introduction pattern. Start with `Dit`.",
+        "tokens": ["Dit", "is", "mijn", "boek"],
+        "answers": ["Dit is mijn boek"],
+        "hint": "Start with Dit is …, then add mijn boek.",
+        "explanation": "`Dit is mijn boek.` — **This is my book.**\n\n`Dit` stands on its own here. Compare **dit boek**, where it is directly before the noun."
+      },
+      {
+        "id": "final-far-plural",
+        "type": "gap",
+        "prompt": "Choose **those books over there**. The books are further away.",
+        "sentence": "___ boeken daar zijn duur.",
+        "answers": ["Die"],
+        "options": ["Dit", "Deze", "Dat", "Die"],
+        "hint": "Plural + far → die.",
+        "explanation": "`Die boeken daar zijn duur.` — **Those books over there are expensive.**\n\nPlural nouns take `deze` near you and `die` further away."
+      },
+      {
+        "id": "final-near-de",
+        "type": "gap",
+        "prompt": "Point at **this street here**, where you are standing. Remember: `de straat`.",
+        "sentence": "___ straat hier is smal.",
+        "answers": ["Deze"],
+        "hint": "Near + singular de-word → deze.",
+        "explanation": "`Deze straat hier is smal.` — **This street here is narrow.**\n\nThe noun is singular, its article is **de**, and the street is near you: use `deze`."
+      },
+      {
+        "id": "summary",
+        "type": "explanation",
+        "heading": "Your four-word checklist",
+        "text": "### Directly before a noun\n- **Near + singular de:** `deze fiets`.\n- **Far + singular de:** `die fiets`.\n- **Near + singular het:** `dit boek`.\n- **Far + singular het:** `dat boek`.\n- **Any plural:** `deze` near / `die` far.\n\n### A neutral introduction\n**Dit is mijn fiets.** — *This is my bicycle.*\n**Dat is mijn fiets.** — *That is my bicycle.*\n\nThese exercises use clear physical near/far contrasts. In real conversations and texts, the words can also refer back to earlier information.\n\nFinish to see your results, then practise mistakes or hinted answers. Grammar reference: Taaladvies.net, “Dit / dat, deze / die (algemeen)”."
+      }
+    ]
+  }
+}

@@ -1,4 +1,14 @@
 import { AppError, body, fail, owner } from '../../lib/server/common';
+import { z } from 'zod';
+import { saveLessonSchema, saveProgramSchema } from '../../lib/lessons';
+import {
+  getLesson,
+  getProgram,
+  listLessons,
+  listPrograms,
+  saveLesson,
+  saveProgram,
+} from '../../lib/server/lessons';
 import {
   addMaterial,
   getMaterial,
@@ -12,6 +22,47 @@ const object = (properties: any, required: string[] = []) => ({
   additionalProperties: false,
 });
 const tools = [
+  {
+    name: 'list_programs',
+    description:
+      'List the caller’s Dutch learning programs and ordered topics. Archived programs are requested explicitly.',
+    inputSchema: object({ archived: { type: 'boolean' } }),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'get_program',
+    description: 'Read a learning program and its version before editing.',
+    inputSchema: object({ id: { type: 'string' } }, ['id']),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'save_program',
+    description:
+      'Create or update a Dutch curriculum with ordered topics. Omit id/version to create; read first and supply both to replace content. Keep topic IDs stable and unique. Referenced topics cannot be removed. Archive with archived=true; no learning progress is deleted. Save lessons separately using save_lesson.',
+    inputSchema: z.toJSONSchema(saveProgramSchema, { io: 'input' }),
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
+  {
+    name: 'list_lessons',
+    description:
+      'List lesson summaries, order and saved completion progress. Filter by programId or explicitly request archived lessons.',
+    inputSchema: object({ programId: { type: 'string' }, archived: { type: 'boolean' } }),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'get_lesson',
+    description:
+      'Read complete lesson content, current authoring version and saved run. A run retains its original content version after edits. Never mark progress complete through authoring.',
+    inputSchema: object({ id: { type: 'string' } }, ['id']),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'save_lesson',
+    description:
+      'Create or update a compact Dutch lesson, standalone or in an existing program/topic. Omit id/version to create; to update, read first and send both plus complete content and associations. Use stable unique block IDs. Alternate brief explanations/examples and exercises; English is the translation reference. Every exercise needs feedback explanation. Descriptive strings accept **bold**, *italic* and `inline code`; explanation text also supports paragraphs, flat lists, # headings and > quotes. Keep answer/answers/options/tokens/matching labels and gap sentence plain text; HTML and links stay literal. Choice: four distinct options, correct is zero-based. Letters/words: tokens must reconstruct answers[0] exactly, including repeated letters/words and spaces. Match: unique left and right labels. Gap: exactly one ___ in sentence, accepted answers, optional distinct options including answers[0]. Table rows match 2–3 columns; diagram is vertical steps; images require HTTPS URL and alt text. Keep lesson content under 70,000 characters. Edits preserve existing runs; archived=true hides the lesson without deleting progress. No provider API calls or answer submissions occur.',
+    inputSchema: z.toJSONSchema(saveLessonSchema, { io: 'input' }),
+    annotations: { readOnlyHint: false, destructiveHint: false },
+  },
   {
     name: 'list_materials',
     description:
@@ -79,7 +130,14 @@ export async function POST(r: Request) {
       try {
         const a = q.params.arguments || {};
         let out;
-        if (q.params.name === 'list_materials')
+        if (q.params.name === 'list_programs') out = await listPrograms(user, a.archived === true);
+        else if (q.params.name === 'get_program') out = await getProgram(user, a.id);
+        else if (q.params.name === 'save_program') out = await saveProgram(user, a);
+        else if (q.params.name === 'list_lessons')
+          out = await listLessons(user, a.programId, a.archived === true);
+        else if (q.params.name === 'get_lesson') out = await getLesson(user, a.id);
+        else if (q.params.name === 'save_lesson') out = await saveLesson(user, a);
+        else if (q.params.name === 'list_materials')
           out = await listMaterials(user, a.query || '', a.archived === true);
         else if (q.params.name === 'get_material') {
           out = await getMaterial(user, a.id);

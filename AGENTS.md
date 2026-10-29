@@ -10,12 +10,13 @@ Read [README.md](README.md) for setup, [docs/PROJECT_STRUCTURE.md](docs/PROJECT_
 - [docs/MCP.md](docs/MCP.md): the chat-facing material tools.
 - [docs/DICTIONARY.md](docs/DICTIONARY.md): pinned dictionary sources, SQLite preparation and generated bilingual JSON assets.
 - [docs/PRACTICE.md](docs/PRACTICE.md): user-facing practice goals, flows and scheduling rules. Keep it aligned with behavior changes.
+- [docs/LESSONS.md](docs/LESSONS.md): program/lesson authoring, exercises, progress and MCP contract.
 - [SECURITY.md](SECURITY.md): authentication and private data boundaries.
 
 ## Architecture
 
 - React with Next-style App Router files, built by **Vinext on Vite** for a **Cloudflare Worker**. Preserve the Sites integration; do not replace the runtime with a plain Next.js server or static export.
-- `app/page.tsx` coordinates Search, Collection, Practice and Settings. `app/texts/page.tsx` selects Texts in the same application; avoid duplicating the app.
+- `app/page.tsx` coordinates Search, Collection, Practice, Lessons and Settings. `app/texts/page.tsx` selects Texts in the same application; avoid duplicating the app.
 - `app/components/` contains feature UI; `app/globals.css` contains shared styling and responsive rules.
 - `app/api/*/route.ts` and `app/mcp/route.ts` share `lib/server/` services. Keep browser and MCP validation and ownership rules consistent.
 - Plain phrase/sentence translation tries Azure first. Live typing previews use Azure only after a 500 ms pause; submitted searches allow OpenAI fallback. Grammar and dictionary enrichment remain on OpenAI. Keep provider readiness, quotas and caches separate; preserve request cancellation and stale-response guards.
@@ -56,6 +57,7 @@ Dictionary regeneration is explicit: `pnpm dictionary:build --wikdict-dir /path/
 
 - Preserve account isolation, optimistic version checks, exact saved Dutch forms, original text and compatible backup imports/exports.
 - Preserve pending practice journals, progress and resumable sessions. Do not reset learning state as part of UI work.
+- Lessons keep versioned run snapshots and server-checked answers. Preserve completed runs, optimistic progress revisions and action-ID retries when editing lesson content or synchronization.
 - Scope caches and recordings to their owner, content and provider/voice configuration. Keep text edits and audio invalidation consistent.
 - Scope routes through the existing trusted identity and mutation helpers in `lib/server/common.ts`; do not trust browser-supplied owner IDs.
 - Append migrations; never rewrite an applied migration. Do not operate on a hosted database to test a local change.

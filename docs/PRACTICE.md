@@ -2,6 +2,13 @@
 
 Practice turns saved Dutch into language you can recognise and produce yourself. Choose an activity, attempt an answer, then use the feedback to decide what needs more work.
 
+**Lessons** is a separate guided activity: explanations and exercises in an authored
+sequence, optionally grouped into programs and topics. It includes flashcards, four-option
+choices, letter blocks, word blocks, matching and typed or choice-based gaps. Lesson
+completion and retries do not change Words scheduling or Sentences rounds. See the
+[lesson guide](LESSONS.md) for saved progress, feedback, version handling and current
+backup/offline limits.
+
 ## Choose a mode
 
 | Mode          | What it trains                               | Material                                                           | Scheduling                                 |

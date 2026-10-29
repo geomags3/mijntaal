@@ -1,0 +1,130 @@
+{
+  "content": {
+    "title": "Getting around town · A1 demo",
+    "description": "A short sample lesson with every exercise format: learn transport words and build simple Dutch sentences.",
+    "goal": "Recognise everyday transport words and use `ik fiets` and `hij fietst` in a short sentence.",
+    "level": "A1",
+    "minutes": 8,
+    "blocks": [
+      {
+        "id": "intro",
+        "type": "explanation",
+        "heading": "A little Dutch for your next trip",
+        "text": "> **Ik fiets naar huis.**\n> *I cycle home.*\n\n### Three useful pieces\n- `Ik` means **I**.\n- `fiets` is the verb form used with `ik`.\n- `naar huis` means **home** when you are going there.\n\nIn this simple statement, the **subject comes first** and the **verb comes second**."
+      },
+      {
+        "id": "choose-meaning",
+        "type": "choice",
+        "prompt": "What does `Ik fiets naar huis` mean?",
+        "options": ["I cycle home.", "I walk to school.", "He cycles home.", "We take the train."],
+        "correct": 0,
+        "hint": "`Ik` means **I**; `fiets` is a form of *fietsen*, to cycle.",
+        "explanation": "**Ik fiets naar huis** means *I cycle home*. The verb `fietsen` describes travelling by bicycle."
+      },
+      {
+        "id": "vocabulary",
+        "type": "table",
+        "caption": "Four useful words — learn nouns with their articles",
+        "columns": ["Dutch", "English"],
+        "rows": [
+          ["de fiets", "the bicycle"],
+          ["de straat", "the street"],
+          ["het huis", "the house"],
+          ["de trein", "the train"]
+        ]
+      },
+      {
+        "id": "build-street",
+        "type": "letters",
+        "prompt": "Build the Dutch phrase for **the street**, including its article.",
+        "tokens": ["d", "e", " ", "s", "t", "r", "a", "a", "t"],
+        "answers": ["de straat"],
+        "hint": "The article is `de`. The noun has two `a` letters.",
+        "explanation": "**The street** is `de straat`.\n\n- `straat` has a double `a` and two `t` letters.\n- The space block separates the article from the noun."
+      },
+      {
+        "id": "bicycle-card",
+        "type": "flashcard",
+        "prompt": "Recall the Dutch phrase for **the bicycle**, including its article.",
+        "answer": "de fiets",
+        "hint": "This noun uses `de`.",
+        "explanation": "**The bicycle** is `de fiets`. Reveal the answer, then honestly choose whether you recalled it; this card uses self-assessment."
+      },
+      {
+        "id": "verb-forms",
+        "type": "explanation",
+        "heading": "I cycle, he cycles",
+        "text": "**Ik fiets.** — *I cycle.*\n**Hij fietst.** — *He cycles.*\n\nIn a simple present-tense statement:\n- Use `fiets` with **ik**.\n- Use `fietst` with **hij**.\n\nThe extra **t** belongs to the verb form.\n\n> **Hij fietst naar huis.**\n> *He cycles home.*"
+      },
+      {
+        "id": "sentence-pattern",
+        "type": "diagram",
+        "caption": "Build a simple statement in three parts",
+        "steps": [
+          "**Subject:** `Ik` — I",
+          "**Verb:** `fiets` — cycle",
+          "**Destination:** `naar huis` — home"
+        ]
+      },
+      {
+        "id": "build-sentence",
+        "type": "words",
+        "prompt": "Build the Dutch translation of **I cycle home**. Start with `Ik`.",
+        "tokens": ["Ik", "fiets", "naar", "huis"],
+        "answers": ["Ik fiets naar huis"],
+        "hint": "Put the **verb** immediately after `Ik`.",
+        "explanation": "`Ik fiets naar huis` follows the pattern **subject → verb → destination**.\n\n`Naar huis` describes going home."
+      },
+      {
+        "id": "match-vocabulary",
+        "type": "match",
+        "prompt": "Match each Dutch phrase with its English meaning.",
+        "pairs": [
+          {
+            "left": "de fiets",
+            "right": "the bicycle"
+          },
+          {
+            "left": "de straat",
+            "right": "the street"
+          },
+          {
+            "left": "het huis",
+            "right": "the house"
+          },
+          {
+            "left": "de trein",
+            "right": "the train"
+          }
+        ],
+        "hint": "Choose a Dutch item first, then its English match. The pair numbers help you check your selections.",
+        "explanation": "- `de fiets` = **the bicycle**\n- `de straat` = **the street**\n- `het huis` = **the house**\n- `de trein` = **the train**\n\n`Huis` uses **het**; the other three nouns use **de**."
+      },
+      {
+        "id": "type-verb",
+        "type": "gap",
+        "prompt": "Complete **I cycle home** with the missing Dutch verb.",
+        "sentence": "Ik ___ naar huis.",
+        "answers": ["fiets"],
+        "hint": "Use the form of `fietsen` that goes with `ik`.",
+        "explanation": "With **ik**, the present-tense form is `fiets`: **Ik fiets naar huis.**\n\nDo not add **t** in this statement."
+      },
+      {
+        "id": "choose-verb",
+        "type": "gap",
+        "prompt": "Complete **He cycles home** in the present tense.",
+        "sentence": "Hij ___ naar huis.",
+        "answers": ["fietst"],
+        "options": ["fiets", "fietst", "fietsen", "gefietst"],
+        "hint": "With `hij` in this statement, add **t** to `fiets`.",
+        "explanation": "**Hij fietst naar huis** means *He cycles home*.\n\nUse `fietst` with **hij**; `fiets` is the form used with **ik**."
+      },
+      {
+        "id": "summary",
+        "type": "explanation",
+        "heading": "Ready for a little trip",
+        "text": "### What you practised\n- Four nouns with their **articles**.\n- The forms `ik fiets` and `hij fietst`.\n- The sentence **Ik fiets naar huis.**\n\nAfter finishing, inspect your results or practise the exercises you missed or answered with help.\n\nCompleting this lesson does not change your Words or Sentences practice schedule."
+      }
+    ]
+  }
+}

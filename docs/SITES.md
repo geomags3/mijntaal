@@ -70,7 +70,7 @@ Your original personal collection is not part of the public starter. Import it m
 
 ## Local development
 
-Use Node.js 24 and pnpm 11.25.0. `pnpm install --frozen-lockfile` installs dependencies. `pnpm build` emits `dist/server/wrangler.json`. On a fresh local store, `pnpm db:local` applies the three tracked migrations in order and records which have been applied. It never uses `--remote`.
+Use Node.js 24 and pnpm 11.25.0. `pnpm install --frozen-lockfile` installs dependencies. `pnpm build` emits `dist/server/wrangler.json`. On a fresh local store, `pnpm db:local` applies the tracked migrations in order and records which have been applied. Run it again after adding migrations, including the lesson tables. It never uses `--remote`.
 
 `pnpm dev -- --hostname 127.0.0.1` runs the portable development server. Loopback development provides a test sign-in identity; it is not production authentication. `pnpm start` runs the built Worker locally and does not simulate sign-in. `.wrangler/state` contains local data; never commit it.
 

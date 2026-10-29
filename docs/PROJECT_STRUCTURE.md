@@ -257,6 +257,18 @@ There is no automatic two-way synchronization between a deployed Site and this l
 - `node_modules/`, `dist/`, `.next/`, `.vinext/`, `.wrangler/` and `.sites-runtime/` are dependencies, builds or checkout-local state. They may be large; start reading authored source instead.
 - Export archives and private recovery material outside this public project are not part of its runtime or intended GitHub contents.
 
+## Programs and lessons
+
+`app/components/lessons.tsx` renders the library, program/topic filters, content blocks,
+exercise controls, feedback, resume/retry actions and completed run history. It is
+mounted through `app/page.tsx` and the shared header's Lessons destination.
+`lib/lessons.ts` owns the shared schemas, normalization and deterministic answer/state
+rules. `lib/server/lessons.ts` supplies owner-scoped authoring, version checks,
+transactional progress updates and immutable completed runs. Browser adapters live
+under `app/api/programs/route.ts` and `app/api/lessons/route.ts`; MCP calls the same
+authoring service. D1 tables are `lesson_programs`, `lessons`, `lesson_progress` and
+`lesson_runs`. See [LESSONS.md](LESSONS.md) for the contract and current limits.
+
 ## Where to make a change
 
 | Desired change                            | Start with                                                                                           |

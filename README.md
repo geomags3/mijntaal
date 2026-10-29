@@ -14,10 +14,13 @@ Collect Dutch words and texts, listen to recordings, and practise the material y
 - Live Azure translation after a 500 ms typing pause, with dictionary and translator results in one card. Matching dictionary entries take priority; Search/Enter retains optional AI fallback.
 - A personal collection with text editing, archive, import and export.
 - Words practice and sentence practice with progress saved to your account.
+- Guided lessons grouped into programs and topics, with explanations, compact visuals,
+  six interactive exercise formats, saved runs and mistake practice.
 - ElevenLabs pronunciation and connected text recordings with sentence highlighting.
-- Four MCP tools: list, read, add and update material.
+- MCP tools to manage learning material, programs and lessons from a conversation.
 
 Learn how to choose a mode, use hints and understand review intervals in the [Practice guide](docs/PRACTICE.md).
+See [Programs and lessons](docs/LESSONS.md) for the lesson format and MCP authoring contract.
 
 ## Requirements
 
@@ -67,6 +70,7 @@ Dictionary preparation is separate from deployment. Run `pnpm dictionary:build -
 ## Data and backups
 
 Collection → Export backup includes archived materials, translations and Words learning history/session state. Import uses preview and preserves conflicting existing edits. Audio binaries, provider keys, settings, browser caches and Sentences session state are not part of collection backups. Keep exports private. Audio can be regenerated with your own provider account.
+Programs, lessons and lesson runs are currently separate from collection backups.
 
 The importer retains the legacy `ultimately-dutch-backup` format identifier for compatibility with existing backups. It is a file-format identifier, not an external service dependency.
 
