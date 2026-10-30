@@ -234,6 +234,15 @@ export const lessonActionSchema = z
   })
   .strict();
 export type LessonAction = z.infer<typeof lessonActionSchema>;
+export const deleteLessonSchema = z
+  .object({
+    id: identifier,
+    version: z.number().int().min(1),
+    revision: z.number().int().min(0),
+    confirm: z.literal(true),
+  })
+  .strict();
+export type DeleteLessonInput = z.infer<typeof deleteLessonSchema>;
 export function expectedLessonAnswer(b: Exercise): string {
   if (b.type === 'choice') return b.options[b.correct];
   if (b.type === 'flashcard') return b.answer;
@@ -358,4 +367,12 @@ export type LessonRecord = {
   content: LessonContent;
   progress: LessonProgress | null;
   revision: number;
+};
+export type LessonRunSummary = {
+  id: string;
+  lesson_version: number;
+  completed: string;
+  correct: number;
+  total: number;
+  finished: boolean;
 };

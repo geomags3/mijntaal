@@ -1,8 +1,9 @@
 import { AppError, body, fail, owner } from '../../lib/server/common';
 import { z } from 'zod';
-import { saveLessonSchema, saveProgramSchema } from '../../lib/lessons';
+import { deleteLessonSchema, saveLessonSchema, saveProgramSchema } from '../../lib/lessons';
 import {
   getLesson,
+  deleteLesson,
   getProgram,
   listLessons,
   listPrograms,
@@ -22,6 +23,13 @@ const object = (properties: any, required: string[] = []) => ({
   additionalProperties: false,
 });
 const tools = [
+  {
+    name: 'delete_lesson',
+    description:
+      'Permanently delete one owned lesson, all its saved progress and run history. This is irreversible and does not move it to Archive. Only use after the user explicitly requests permanent deletion of that lesson. Read get_lesson first, then pass its id, version and progress revision plus confirm=true. On conflict reload and obtain confirmation again. Other lessons, programs and collection materials remain unchanged.',
+    inputSchema: z.toJSONSchema(deleteLessonSchema, { io: 'input' }),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+  },
   {
     name: 'list_programs',
     description:
@@ -130,7 +138,9 @@ export async function POST(r: Request) {
       try {
         const a = q.params.arguments || {};
         let out;
-        if (q.params.name === 'list_programs') out = await listPrograms(user, a.archived === true);
+        if (q.params.name === 'delete_lesson') out = await deleteLesson(user, a);
+        else if (q.params.name === 'list_programs')
+          out = await listPrograms(user, a.archived === true);
         else if (q.params.name === 'get_program') out = await getProgram(user, a.id);
         else if (q.params.name === 'save_program') out = await saveProgram(user, a);
         else if (q.params.name === 'list_lessons')

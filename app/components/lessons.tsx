@@ -1,27 +1,43 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, RefreshCw } from 'lucide-react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Check,
+  Clock,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import LessonMarkdown, { LessonInline } from './lesson-markdown';
+import { advanceSampleLesson, createSampleLesson } from '../../lib/sample-lesson';
 import {
   expectedLessonAnswer,
   isExercise,
   type Exercise,
   type LessonAction,
+  type DeleteLessonInput,
   type LessonBlock,
   type LessonRecord,
+  type LessonRunSummary,
   type LessonSummary,
   type ProgramRecord,
 } from '../../lib/lessons';
 
-async function request<T>(url: string, action?: LessonAction): Promise<T> {
+async function request<T>(
+  url: string,
+  input?: LessonAction | DeleteLessonInput,
+  method: 'POST' | 'DELETE' = 'POST',
+): Promise<T> {
   const r = await fetch(url, {
     cache: 'no-store',
     signal: AbortSignal.timeout(20000),
-    ...(action
+    ...(input
       ? {
-          method: 'POST',
+          method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(action),
+          body: JSON.stringify(input),
         }
       : {}),
   });
@@ -423,6 +439,76 @@ function ExerciseView({
     </div>
   );
 }
+function LessonConfirmation({
+  kind,
+  title,
+  onCancel,
+  onConfirm,
+  cancelRef,
+  sample = false,
+}: {
+  kind: 'restart' | 'delete';
+  title: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  cancelRef: RefObject<HTMLButtonElement | null>;
+  sample?: boolean;
+}) {
+  return (
+    <div
+      className={'lesson-confirmation ' + (kind === 'delete' ? 'lesson-delete-confirm' : '')}
+      role="group"
+      aria-labelledby={'lesson-' + kind + '-title'}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <h2 id={'lesson-' + kind + '-title'}>
+        {kind === 'delete' ? 'Permanently delete this lesson?' : 'Start this lesson over?'}
+      </h2>
+      {kind === 'delete' ? (
+        <>
+          <p>
+            <strong>{title}</strong>
+          </p>
+          <p>
+            This permanently removes the lesson, all saved progress and previous runs. It cannot be
+            undone.
+          </p>
+        </>
+      ) : sample ? (
+        <p>
+          You’ll start the sample again at step 1. Sample progress is not saved to your account.
+        </p>
+      ) : (
+        <p>
+          You’ll start at step 1 of the latest lesson. Your current run and checked answers will
+          stay in Previous runs.
+        </p>
+      )}
+      <div className="lesson-actions">
+        <button className="secondary" ref={cancelRef} onClick={onCancel}>
+          {kind === 'delete' ? 'Keep lesson' : 'Keep learning'}
+        </button>
+        <button
+          className={'primary' + (kind === 'delete' ? ' danger-button' : '')}
+          onClick={onConfirm}
+        >
+          {kind === 'delete' ? (
+            <Trash2 size={16} aria-hidden="true" />
+          ) : (
+            <RotateCcw size={16} aria-hidden="true" />
+          )}{' '}
+          {kind === 'delete' ? 'Delete permanently' : 'Start over'}
+        </button>
+      </div>
+    </div>
+  );
+}
 export default function Lessons({ visible }: { visible: boolean }) {
   const [programs, setPrograms] = useState<ProgramRecord[]>([]),
     [lessons, setLessons] = useState<LessonSummary[]>([]),
@@ -434,31 +520,36 @@ export default function Lessons({ visible }: { visible: boolean }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [conflict, setConflict] = useState(false),
-    [pending, setPending] = useState<LessonAction | null>(null);
+    [pending, setPending] = useState<LessonAction | null>(null),
+    [restartConfirm, setRestartConfirm] = useState(false),
+    [deleteConfirm, setDeleteConfirm] = useState(false),
+    [pendingDelete, setPendingDelete] = useState<DeleteLessonInput | null>(null);
+  const [sample, setSample] = useState(false);
   const sequence = useRef(0),
     locked = useRef(false),
-    heading = useRef<HTMLHeadingElement>(null);
-  const [history, setHistory] = useState<
-    | { id: string; lesson_version: number; completed: string; correct: number; total: number }[]
-    | null
-  >(null);
+    heading = useRef<HTMLHeadingElement>(null),
+    restartButton = useRef<HTMLButtonElement>(null),
+    deleteButton = useRef<HTMLButtonElement>(null),
+    restartCancel = useRef<HTMLButtonElement>(null);
+  const [history, setHistory] = useState<LessonRunSummary[] | null>(null);
   const lessonId = lesson?.id;
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || sample) return;
     let active = true;
     const refresh = () => {
+      const seq = sequence.current;
       void Promise.all([
         request<ProgramRecord[]>('/api/programs'),
         request<LessonSummary[]>('/api/lessons'),
       ])
         .then(([p, l]) => {
-          if (active) {
+          if (active && sequence.current === seq) {
             setPrograms(p);
             setLessons(l);
           }
         })
         .catch((e) => {
-          if (active) setError(e.message);
+          if (active && sequence.current === seq) setError(e.message);
         });
     };
     refresh();
@@ -467,24 +558,40 @@ export default function Lessons({ visible }: { visible: boolean }) {
       active = false;
       window.removeEventListener('focus', refresh);
     };
-  }, [visible, lesson?.progress?.completed]);
+  }, [visible, lesson?.progress?.completed, sample]);
   useEffect(() => {
-    if (visible && lessonId) heading.current?.focus();
+    if (visible) heading.current?.focus();
   }, [visible, lessonId, lesson?.progress?.index, lesson?.progress?.runId]);
+  useEffect(() => {
+    if (visible && (restartConfirm || deleteConfirm)) restartCancel.current?.focus();
+  }, [visible, restartConfirm, deleteConfirm]);
   async function open(id: string) {
+    setSample(false);
     const seq = ++sequence.current;
     setLoading(true);
     setError('');
     setHistory(null);
+    setRestartConfirm(false);
+    setDeleteConfirm(false);
     try {
       const value = await request<LessonRecord>('/api/lessons?id=' + encodeURIComponent(id));
       if (sequence.current === seq) {
         setLesson(value);
         setPending(null);
+        setPendingDelete(null);
         setConflict(false);
       }
     } catch (e) {
-      if (sequence.current === seq) setError((e as Error).message);
+      if (sequence.current === seq) {
+        if ((e as { status?: number }).status === 404) {
+          setLesson(null);
+          setPending(null);
+          setPendingDelete(null);
+          setConflict(false);
+          setLessons((items) => items.filter((item) => item.id !== id));
+          setError('This lesson has already been deleted.');
+        } else setError((e as Error).message);
+      }
     } finally {
       if (sequence.current === seq) setLoading(false);
     }
@@ -497,12 +604,36 @@ export default function Lessons({ visible }: { visible: boolean }) {
     setError('');
     setPending(a);
     try {
-      const value = await request<LessonRecord>('/api/lessons', a);
+      const value =
+        sample && lesson
+          ? advanceSampleLesson(lesson, a)
+          : await request<LessonRecord>('/api/lessons', a);
       setLesson(value);
       setPending(null);
       setConflict(false);
       setHistory(null);
+      const progress = value.progress;
+      if (!sample)
+        setLessons((items) =>
+          items.map((item) =>
+            item.id === value.id
+              ? {
+                  ...item,
+                  version: value.version,
+                  progress: progress
+                    ? {
+                        completed: progress.completed,
+                        index: progress.index,
+                        total: progress.content.blocks.length,
+                        lessonVersion: progress.lessonVersion,
+                      }
+                    : null,
+                }
+              : item,
+          ),
+        );
     } catch (e) {
+      if (sample) setPending(null);
       setError((e as Error).message);
       setConflict((e as { status?: number }).status === 409);
     } finally {
@@ -511,7 +642,7 @@ export default function Lessons({ visible }: { visible: boolean }) {
     }
   }
   function send(action: LessonAction['action'], fields: Partial<LessonAction> = {}) {
-    if (!lesson || pending || locked.current) return;
+    if (!lesson || pending || pendingDelete || locked.current) return;
     void submit({
       ...fields,
       action,
@@ -519,6 +650,49 @@ export default function Lessons({ visible }: { visible: boolean }) {
       revision: lesson.revision,
       eventId: crypto.randomUUID(),
     });
+  }
+  async function remove(input: DeleteLessonInput) {
+    if (locked.current || sample) return;
+    sequence.current++;
+    locked.current = true;
+    setBusy(true);
+    setError('');
+    setPendingDelete(input);
+    try {
+      await request('/api/lessons', input, 'DELETE');
+      setLesson(null);
+      setHistory(null);
+      setRestartConfirm(false);
+      setDeleteConfirm(false);
+      setPendingDelete(null);
+      setConflict(false);
+      setLessons((items) => items.filter((item) => item.id !== input.id));
+    } catch (e) {
+      setError((e as Error).message);
+      setConflict((e as { status?: number }).status === 409);
+    } finally {
+      locked.current = false;
+      setBusy(false);
+    }
+  }
+  const blocked = busy || !!pending || !!pendingDelete || loading;
+  function exploreSample() {
+    if (blocked) return;
+    sequence.current++;
+    const initial = createSampleLesson();
+    setSample(true);
+    setLesson(
+      advanceSampleLesson(initial, {
+        action: 'start',
+        lessonId: initial.id,
+        revision: 0,
+        eventId: crypto.randomUUID(),
+      }),
+    );
+    setError('');
+    setHistory(null);
+    setRestartConfirm(false);
+    setDeleteConfirm(false);
   }
   const p = lesson?.progress,
     block = p?.content.blocks[p.index],
@@ -562,18 +736,25 @@ export default function Lessons({ visible }: { visible: boolean }) {
       {error && (
         <div className="alert" role="alert">
           <p>{error}</p>
-          {pending ? (
+          {pending || pendingDelete ? (
             conflict ? (
               <button
                 className="secondary"
                 disabled={busy || loading}
                 onClick={() => lesson && void open(lesson.id)}
               >
-                Reload saved progress
+                {pendingDelete ? 'Reload latest lesson' : 'Reload saved progress'}
               </button>
             ) : (
-              <button className="secondary" disabled={busy} onClick={() => void submit(pending)}>
-                Retry saving
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() => {
+                  if (pendingDelete) void remove(pendingDelete);
+                  else if (pending) void submit(pending);
+                }}
+              >
+                {pendingDelete ? 'Retry deletion' : 'Retry saving'}
               </button>
             )
           ) : (
@@ -582,26 +763,97 @@ export default function Lessons({ visible }: { visible: boolean }) {
             </button>
           )}
           <p className="lesson-muted">
-            Only saved steps can be resumed on another device.
-            {pending && ' Keep this page open to retry your pending action.'}
+            {pendingDelete ? (
+              conflict ? (
+                'Reload the lesson, then confirm deletion again.'
+              ) : (
+                'Deletion could not be confirmed. Keep this page open to retry.'
+              )
+            ) : (
+              <>
+                Only saved steps can be resumed on another device.
+                {pending && ' Keep this page open to retry your pending action.'}
+              </>
+            )}
           </p>
         </div>
       )}
       {loading && <p role="status">Loading lesson…</p>}
+      {busy && pendingDelete && <p role="status">Deleting lesson…</p>}
       {lesson ? (
         <>
-          <button
-            className="lesson-text-button"
-            disabled={busy || !!pending || loading}
-            onClick={() => {
-              sequence.current++;
-              setLesson(null);
-              setHistory(null);
-              setError('');
-            }}
-          >
-            <ArrowLeft size={16} aria-hidden="true" /> All lessons
-          </button>
+          <div className="lesson-navigation">
+            <button
+              className="lesson-text-button"
+              disabled={blocked}
+              onClick={() => {
+                sequence.current++;
+                setLesson(null);
+                setSample(false);
+                setHistory(null);
+                setError('');
+                setRestartConfirm(false);
+                setDeleteConfirm(false);
+              }}
+            >
+              <ArrowLeft size={16} aria-hidden="true" /> All lessons
+            </button>
+            <div className="lesson-management-actions">
+              {p && !p.completed && !lesson.archived && (
+                <button
+                  className="lesson-text-button"
+                  ref={restartButton}
+                  disabled={blocked || deleteConfirm}
+                  onClick={() => setRestartConfirm(true)}
+                >
+                  <RotateCcw size={16} aria-hidden="true" /> Start over
+                </button>
+              )}
+              {!sample && (
+                <button
+                  className="lesson-text-button lesson-delete-button"
+                  ref={deleteButton}
+                  disabled={blocked || restartConfirm}
+                  onClick={() => setDeleteConfirm(true)}
+                >
+                  <Trash2 size={16} aria-hidden="true" /> Delete lesson
+                </button>
+              )}
+            </div>
+          </div>
+          {(deleteConfirm || (restartConfirm && p)) && !blocked && (
+            <LessonConfirmation
+              kind={deleteConfirm ? 'delete' : 'restart'}
+              title={lesson.content.title}
+              cancelRef={restartCancel}
+              sample={sample}
+              onCancel={() => {
+                setRestartConfirm(false);
+                setDeleteConfirm(false);
+                (
+                  (deleteConfirm ? deleteButton.current : restartButton.current) || heading.current
+                )?.focus();
+              }}
+              onConfirm={() => {
+                setRestartConfirm(false);
+                if (deleteConfirm) {
+                  setDeleteConfirm(false);
+                  void remove({
+                    id: lesson.id,
+                    version: lesson.version,
+                    revision: lesson.revision,
+                    confirm: true,
+                  });
+                } else send('restart');
+              }}
+            />
+          )}
+          {sample && (
+            <p className="lesson-hint" role="status">
+              Sample lesson · Progress stays on this page and is not saved to your account. Nothing
+              is added to your library.
+            </p>
+          )}
           {p && p.lessonVersion !== lesson.version && (
             <p className="lesson-hint">
               This run uses version {p.lessonVersion}. A newer lesson is available; your saved run
@@ -620,7 +872,7 @@ export default function Lessons({ visible }: { visible: boolean }) {
               </p>
               <button
                 className="primary"
-                disabled={busy || !!pending || loading || lesson.archived}
+                disabled={blocked || deleteConfirm || lesson.archived}
                 onClick={() => send('start')}
               >
                 Start lesson <ArrowRight size={16} aria-hidden="true" />
@@ -669,45 +921,22 @@ export default function Lessons({ visible }: { visible: boolean }) {
               <div className="lesson-actions">
                 <button
                   className="secondary"
-                  disabled={busy || !!pending || !p.results.some((r) => !r.correct || r.helped)}
+                  disabled={
+                    blocked || deleteConfirm || !p.results.some((r) => !r.correct || r.helped)
+                  }
                   onClick={() => send('retry')}
                 >
                   Practise mistakes
                 </button>
                 <button
                   className="primary"
-                  disabled={busy || !!pending}
+                  ref={restartButton}
+                  disabled={blocked || deleteConfirm}
                   onClick={() => send('restart')}
                 >
-                  Start latest lesson again
-                </button>
-                <button
-                  className="lesson-text-button"
-                  disabled={busy || !!pending || loading}
-                  onClick={() => {
-                    const seq = sequence.current;
-                    void request<typeof history>('/api/lessons?id=' + lesson.id + '&history=true')
-                      .then((value) => {
-                        if (seq === sequence.current) setHistory(value);
-                      })
-                      .catch((e) => {
-                        if (seq === sequence.current) setError(e.message);
-                      });
-                  }}
-                >
-                  Previous runs
+                  {sample ? 'Try sample again' : 'Start latest lesson again'}
                 </button>
               </div>
-              {history && (
-                <ul className="lesson-history">
-                  {history.map((run) => (
-                    <li key={run.id}>
-                      Version {run.lesson_version} · {new Date(run.completed).toLocaleDateString()}{' '}
-                      · {run.correct}/{run.total} independently correct
-                    </li>
-                  ))}
-                </ul>
-              )}
             </article>
           ) : (
             block && (
@@ -716,7 +945,15 @@ export default function Lessons({ visible }: { visible: boolean }) {
                   <span>
                     Step {p.index + 1} of {p.content.blocks.length}
                   </span>
-                  <span>{busy ? 'Saving…' : pending ? 'Not saved' : 'Progress saved'}</span>
+                  <span>
+                    {sample
+                      ? 'Sample · not saved'
+                      : busy
+                        ? 'Saving…'
+                        : pending
+                          ? 'Not saved'
+                          : 'Progress saved'}
+                  </span>
                 </div>
                 <progress
                   max={p.content.blocks.length}
@@ -728,7 +965,7 @@ export default function Lessons({ visible }: { visible: boolean }) {
                     key={p.runId + ':' + p.index}
                     block={block}
                     lesson={lesson}
-                    busy={busy || !!pending || loading}
+                    busy={blocked || restartConfirm || deleteConfirm}
                     send={send}
                   />
                 ) : (
@@ -737,7 +974,7 @@ export default function Lessons({ visible }: { visible: boolean }) {
                 {(!isExercise(block) || p.feedback) && (
                   <button
                     className="primary lesson-continue"
-                    disabled={busy || !!pending || loading}
+                    disabled={blocked || restartConfirm || deleteConfirm}
                     onClick={() => send('continue')}
                   >
                     {p.index === p.content.blocks.length - 1 ? 'Finish lesson' : 'Continue'}
@@ -746,6 +983,40 @@ export default function Lessons({ visible }: { visible: boolean }) {
                 )}
               </article>
             )
+          )}
+          {p && !sample && (
+            <div className="lesson-run-history">
+              <button
+                className="lesson-text-button"
+                disabled={blocked}
+                onClick={() => {
+                  const seq = sequence.current;
+                  void request<LessonRunSummary[]>('/api/lessons?id=' + lesson.id + '&history=true')
+                    .then((value) => {
+                      if (seq === sequence.current) setHistory(value);
+                    })
+                    .catch((e) => {
+                      if (seq === sequence.current) setError(e.message);
+                    });
+                }}
+              >
+                Previous runs
+              </button>
+              {history &&
+                (history.length ? (
+                  <ul className="lesson-history">
+                    {history.map((run) => (
+                      <li key={run.id}>
+                        {run.finished ? 'Completed' : 'Restarted'} · Version {run.lesson_version} ·{' '}
+                        {new Date(run.completed).toLocaleDateString()} · {run.correct}/{run.total}{' '}
+                        independently correct
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="lesson-muted">No previous runs yet.</p>
+                ))}
+            </div>
           )}
         </>
       ) : (
@@ -820,53 +1091,63 @@ export default function Lessons({ visible }: { visible: boolean }) {
               <p>
                 {lessons.length
                   ? 'Try another topic or search.'
-                  : 'Ask ChatGPT to create a Dutch lesson or a complete program, then save it to MijnTaal.'}
+                  : 'Ask ChatGPT to create a Dutch lesson or a complete program, then save it to @MijnTaal.'}
               </p>
               {!lessons.length && (
                 <blockquote>
                   “Create a short A1 lesson about Dutch word order, with examples and interactive
-                  exercises, and save it to MijnTaal.”
+                  exercises, and save it to @MijnTaal.”
                 </blockquote>
+              )}
+              {!lessons.length && (
+                <button
+                  className="secondary lesson-sample-action"
+                  disabled={blocked}
+                  onClick={exploreSample}
+                >
+                  Explore a sample lesson
+                </button>
               )}
             </div>
           )}
           <div className="lesson-library">
             {filtered.map((l) => (
-              <button
-                className="lesson-library-card"
-                key={l.id}
-                disabled={loading}
-                onClick={() => void open(l.id)}
-              >
-                <span className="eyebrow">
-                  {l.programId
-                    ? programs.find((p) => p.id === l.programId)?.content.title
-                    : 'STANDALONE'}
-                  {l.topicId &&
-                    ` · ${programs.find((p) => p.id === l.programId)?.content.topics.find((t) => t.id === l.topicId)?.title || ''}`}
-                </span>
-                <h2>{l.title}</h2>
-                <p>{l.description}</p>
-                <span className="lesson-muted">
-                  {l.level && `${l.level} · `}
-                  {l.minutes} min
-                </span>
-                <span className="lesson-card-status">
-                  {l.progress?.completed ? (
-                    <>
-                      <Check size={16} /> Completed
-                    </>
-                  ) : l.progress ? (
-                    <>
-                      Continue · {l.progress.index + 1}/{l.progress.total}
-                    </>
-                  ) : (
-                    <>
-                      Start lesson <ArrowRight size={16} />
-                    </>
-                  )}
-                </span>
-              </button>
+              <article className="lesson-library-card" key={l.id}>
+                <button
+                  className="lesson-card-open"
+                  disabled={loading}
+                  onClick={() => void open(l.id)}
+                >
+                  <span className="eyebrow">
+                    {l.programId
+                      ? programs.find((p) => p.id === l.programId)?.content.title
+                      : 'STANDALONE'}
+                    {l.topicId &&
+                      ` · ${programs.find((p) => p.id === l.programId)?.content.topics.find((t) => t.id === l.topicId)?.title || ''}`}
+                  </span>
+                  <h2>{l.title}</h2>
+                  <p>{l.description}</p>
+                  <span className="lesson-muted">
+                    {l.level && `${l.level} · `}
+                    {l.minutes} min
+                  </span>
+                  <span className="lesson-card-status">
+                    {l.progress?.completed ? (
+                      <>
+                        <Check size={16} /> Completed
+                      </>
+                    ) : l.progress ? (
+                      <>
+                        Continue · {l.progress.index + 1}/{l.progress.total}
+                      </>
+                    ) : (
+                      <>
+                        Start lesson <ArrowRight size={16} />
+                      </>
+                    )}
+                  </span>
+                </button>
+              </article>
             ))}
           </div>
           <button

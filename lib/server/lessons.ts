@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { AppError, db } from './common';
 import {
   applyLessonAction,
+  deleteLessonSchema,
   lessonActionSchema,
   saveLessonSchema,
   saveProgramSchema,
   type LessonProgress,
   type LessonRecord,
+  type LessonRunSummary,
   type LessonSummary,
   type ProgramRecord,
 } from '../lessons';
@@ -132,6 +134,44 @@ export async function getLesson(user: string, id: string): Promise<LessonRecord>
     revision: p?.revision || 0,
   };
 }
+export async function deleteLesson(user: string, input: unknown) {
+  const b = parse(deleteLessonSchema, input);
+  const l = await db()
+    .prepare('SELECT version FROM lessons WHERE id=? AND owner=?')
+    .bind(b.id, user)
+    .first<{ version: number }>();
+  // An absent owned lesson is already deleted. Retrying a lost response succeeds
+  // without retaining a tombstone or revealing another account's lesson.
+  if (!l) return { id: b.id, deleted: true };
+  const p = await storedProgress(user, b.id);
+  if (l.version !== b.version || (p?.revision || 0) !== b.revision)
+    throw new AppError(
+      'The lesson or its progress changed. Reload before confirming deletion again.',
+      409,
+    );
+  await commit([
+    guard('EXISTS(SELECT 1 FROM lessons WHERE id=? AND owner=? AND version=?)', [
+      b.id,
+      user,
+      b.version,
+    ]),
+    p
+      ? guard(
+          'EXISTS(SELECT 1 FROM lesson_progress WHERE lesson_id=? AND owner=? AND revision=?)',
+          [b.id, user, b.revision],
+        )
+      : guard('NOT EXISTS(SELECT 1 FROM lesson_progress WHERE lesson_id=? AND owner=?)', [
+          b.id,
+          user,
+        ]),
+    db().prepare('DELETE FROM lesson_runs WHERE lesson_id=? AND owner=?').bind(b.id, user),
+    db().prepare('DELETE FROM lesson_progress WHERE lesson_id=? AND owner=?').bind(b.id, user),
+    db()
+      .prepare('DELETE FROM lessons WHERE id=? AND owner=? AND version=?')
+      .bind(b.id, user, b.version),
+  ]);
+  return { id: b.id, deleted: true };
+}
 export async function listLessons(
   user: string,
   programId?: string,
@@ -248,15 +288,33 @@ export async function saveLesson(user: string, input: unknown) {
   await commit([...guards, write]);
   return getLesson(user, id);
 }
-export async function lessonHistory(user: string, id: string) {
+export async function lessonHistory(user: string, id: string): Promise<LessonRunSummary[]> {
   await row('lessons', user, id);
   const r = await db()
     .prepare(
-      'SELECT id,lesson_version,completed,correct,total FROM lesson_runs WHERE lesson_id=? AND owner=? ORDER BY completed DESC LIMIT 30',
+      "SELECT id,lesson_version,completed,correct,total,COALESCE(json_extract(body,'$.completed'),1) AS finished FROM lesson_runs WHERE lesson_id=? AND owner=? ORDER BY completed DESC LIMIT 30",
     )
     .bind(id, user)
-    .all();
-  return r.results;
+    .all<Omit<LessonRunSummary, 'finished'> & { finished: number }>();
+  return r.results.map((run) => ({ ...run, finished: !!run.finished }));
+}
+function archiveRun(user: string, lessonId: string, run: LessonProgress, ended: string) {
+  // The legacy completed column is the end timestamp. The immutable JSON snapshot
+  // distinguishes a completed run from an unfinished run saved before a restart.
+  return db()
+    .prepare(
+      'INSERT OR IGNORE INTO lesson_runs(id,lesson_id,owner,lesson_version,body,completed,correct,total) VALUES(?,?,?,?,?,?,?,?)',
+    )
+    .bind(
+      run.runId,
+      lessonId,
+      user,
+      run.lessonVersion,
+      JSON.stringify(run),
+      ended,
+      run.results.filter((r) => r.correct && !r.helped && !r.selfAssessed).length,
+      run.results.length,
+    );
 }
 export async function actOnLesson(user: string, input: unknown) {
   const a = parse(lessonActionSchema, input),
@@ -270,12 +328,13 @@ export async function actOnLesson(user: string, input: unknown) {
   let next: LessonProgress;
   const starting = ['start', 'restart', 'retry'].includes(a.action);
   if (starting) {
-    if (previous && !previous.completed)
+    if (previous && !previous.completed && a.action !== 'restart')
       throw new AppError('Resume the unfinished lesson first.', 409);
     if (l.archived) throw new AppError('This lesson is archived.');
     if (l.program_id && (await row('lesson_programs', user, l.program_id)).archived)
       throw new AppError('This program is archived.');
-    if ((a.action === 'restart' || a.action === 'retry') && !previous?.completed)
+    if (a.action === 'restart' && !previous) throw new AppError('Start the lesson first.');
+    if (a.action === 'retry' && !previous?.completed)
       throw new AppError('Finish the lesson first.');
     let content = JSON.parse(l.body),
       lessonVersion = l.version;
@@ -348,23 +407,9 @@ export async function actOnLesson(user: string, input: unknown) {
       )
       .bind(l.id, user, revision, JSON.stringify(next), now),
   );
-  if (next.completed)
-    statements.push(
-      db()
-        .prepare(
-          'INSERT OR IGNORE INTO lesson_runs(id,lesson_id,owner,lesson_version,body,completed,correct,total) VALUES(?,?,?,?,?,?,?,?)',
-        )
-        .bind(
-          next.runId,
-          l.id,
-          user,
-          next.lessonVersion,
-          JSON.stringify(next),
-          now,
-          next.results.filter((r) => r.correct && !r.helped && !r.selfAssessed).length,
-          next.results.length,
-        ),
-    );
+  if (a.action === 'restart' && previous && !previous.completed)
+    statements.push(archiveRun(user, l.id, previous, now));
+  if (next.completed) statements.push(archiveRun(user, l.id, next, now));
   await commit(statements);
   return getLesson(user, l.id);
 }

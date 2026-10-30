@@ -1,5 +1,6 @@
 import {
   actOnLesson,
+  deleteLesson,
   getLesson,
   lessonHistory,
   listLessons,
@@ -40,6 +41,14 @@ export async function PUT(r: Request) {
   try {
     mutation(r);
     return json(await saveLesson(owner(r), await body(r)));
+  } catch (e) {
+    return fail(e);
+  }
+}
+export async function DELETE(r: Request) {
+  try {
+    mutation(r);
+    return json(await deleteLesson(owner(r), await body(r)));
   } catch (e) {
     return fail(e);
   }

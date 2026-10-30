@@ -6,6 +6,14 @@ answers immediately and saves progress. Taking a lesson requires no provider API
 Dutch remains the target language and English the translation reference. Explanations
 can use the learner's requested language.
 
+An empty library offers **Explore a sample lesson**, like the sample reader in Texts.
+It immediately opens the first step of the bundled getting-around-town example,
+including all six exercise formats, hints, feedback and mistake practice. This is an
+unsaved preview: answers stay in the current page's memory, no account records are
+created, and leaving the sample or reloading starts it fresh. It cannot delete an
+owned lesson and does not expose account run history. Collection and practice progress
+remain unchanged. The chat example uses `@MijnTaal` to identify the Site in ChatGPT.
+
 ## Organization
 
 A program contains ordered topics. Lessons can belong to a program and one of its
@@ -80,16 +88,41 @@ completion guarantee. Only acknowledged actions are safe to resume on another de
 
 A run captures the lesson version and content at its start. Later edits do not alter
 that run or its completed results. The learner can finish that version, then explicitly
-start the latest version. Restarting an unfinished run is not offered. Completed runs
+start the latest version. **Start over** is available inside an unfinished lesson;
+library cards stay focused on opening or continuing a lesson. Confirmation starts step 1 of the latest version;
+Cancel / Keep learning and Escape leave progress untouched. The unfinished run, including
+checked answers and feedback, is atomically saved to Previous runs before it is replaced.
+History labels it **Restarted**, separately from **Completed** runs. A lost response can
+be retried with the same action ID without saving the old run or restarting twice.
+Concurrent progress changes require reloading and confirming again. Completed runs
 are retained in history when a new run begins. Mistakes can be reviewed and practised
 in a separate retry run. Finishing a lesson does not imply long-term mastery and does
 not change Words or Sentences scheduling. Content is not automatically added to the
 collection. Lesson data is currently separate from collection backups.
 
+### Permanently deleting a lesson
+
+Open a lesson and choose **Delete lesson**. This works before starting as well as
+during or after a run. The confirmation names the lesson and warns that **Delete
+permanently** removes the lesson, its progress and every saved run, without moving
+anything to Archive. **Keep lesson** and Escape cancel without changing data.
+Programs, topics, other lessons and collection materials remain unchanged.
+
+Browser `DELETE /api/lessons` and MCP `delete_lesson` share the same owner-scoped
+service and require `{id, version, revision, confirm: true}` from a fresh lesson read.
+Deletion is atomic and checks both the authoring version and progress revision;
+concurrent edits or answers require reloading and confirming again. Retrying an
+already successful deletion is a no-op. No deleted content or tombstone is retained.
+In the browser, an uncertain response keeps other lesson actions disabled until
+Retry deletion or an explicit conflict reload resolves it. Older library responses
+cannot put a deleted card back on screen.
+
 ## MCP authoring contract
 
 - `list_programs`, `get_program`, `save_program` organize curricula and topics.
 - `list_lessons`, `get_lesson`, `save_lesson` author and maintain lesson content.
+- `delete_lesson` permanently removes an explicitly selected lesson after user approval;
+  read the lesson first and pass its version and progress revision with `confirm: true`.
 - Omit `id` and `version` to create. To update, read first and provide both the current
   `id` and `version`, plus the complete content. Updates return the new version.
 - Keep IDs of unchanged topics and blocks stable. Generate a whole program outline

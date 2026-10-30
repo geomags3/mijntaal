@@ -307,7 +307,7 @@ function invalid(change) {
   assert.equal(lesson.progress.content.blocks.length, 2);
   assert.equal(lesson.progress.lessonVersion, 1);
   assert.equal((await service.lessonHistory('alice', lesson.id)).length, 1);
-  await assert.rejects(() => act('restart'), /unfinished/);
+  await assert.rejects(() => act('start'), /unfinished/);
   await act('check', { answer: '0' });
   await act('continue');
   await act('check', { answer: [0, 1] });
@@ -338,6 +338,236 @@ function invalid(change) {
     (e) => e.status === 409,
   );
   assert.equal((await service.listLessons('alice')).length, count);
+  // Explicit restart keeps unfinished answers and uses the latest authored lesson.
+  let resetting = await service.saveLesson('reset-user', {
+    content: { ...content, blocks: [blocks[0], byType('gap')] },
+  });
+  const resetAct = async (action, fields = {}) => {
+    resetting = await service.actOnLesson('reset-user', {
+      lessonId: resetting.id,
+      revision: resetting.revision,
+      eventId: crypto.randomUUID(),
+      action,
+      ...fields,
+    });
+    return resetting;
+  };
+  await assert.rejects(() => resetAct('restart'), /Start the lesson/);
+  await resetAct('start');
+  await resetAct('continue');
+  await resetAct('hint');
+  await resetAct('check', { answer: 'fiets' });
+  const unfinished = copy(resetting.progress),
+    oldRevision = resetting.revision;
+  await service.saveLesson('reset-user', {
+    id: resetting.id,
+    version: 1,
+    content: { ...resetting.content, title: 'Latest reset lesson' },
+  });
+  const restart = {
+    lessonId: resetting.id,
+    revision: oldRevision,
+    eventId: 'explicit-restart',
+    action: 'restart',
+  };
+  resetting = await service.actOnLesson('reset-user', restart);
+  assert.notEqual(resetting.progress.runId, unfinished.runId);
+  assert.equal(resetting.progress.index, 0);
+  assert.equal(resetting.progress.results.length, 0);
+  assert.equal(resetting.progress.feedback, null);
+  assert.equal(resetting.progress.hinted, false);
+  assert.equal(resetting.progress.lessonVersion, 2);
+  assert.equal(resetting.progress.content.title, 'Latest reset lesson');
+  let savedRuns = await service.lessonHistory('reset-user', resetting.id);
+  assert.equal(savedRuns.length, 1);
+  assert.equal(savedRuns[0].finished, false);
+  assert.equal(savedRuns[0].id, unfinished.runId);
+  assert.equal(savedRuns[0].total, 1);
+  assert.equal(savedRuns[0].correct, 0); // a hinted answer is not independently correct
+  assert.deepEqual(
+    JSON.parse(
+      sqlite
+        .prepare('SELECT body FROM lesson_runs WHERE id=? AND owner=?')
+        .get(unfinished.runId, 'reset-user').body,
+    ),
+    unfinished,
+  );
+  const revisionAfterRestart = resetting.revision;
+  assert.equal((await service.actOnLesson('reset-user', restart)).revision, revisionAfterRestart);
+  assert.equal((await service.lessonHistory('reset-user', resetting.id)).length, 1);
+  await assert.rejects(
+    () =>
+      service.actOnLesson('reset-user', {
+        ...restart,
+        action: 'continue',
+        eventId: 'old-tab-after-reset',
+      }),
+    (e) => e.status === 409,
+  );
+  await assert.rejects(
+    () => service.actOnLesson('bob', { ...restart, revision: revisionAfterRestart }),
+    (e) => e.status === 404,
+  );
+  await assert.rejects(
+    () => service.lessonHistory('bob', resetting.id),
+    (e) => e.status === 404,
+  );
+  const liveRunId = resetting.progress.runId;
+  beforeBatch = () =>
+    sqlite
+      .prepare('UPDATE lesson_progress SET revision=revision+1 WHERE lesson_id=?')
+      .run(resetting.id);
+  await assert.rejects(
+    () => resetAct('restart'),
+    (e) => e.status === 409,
+  );
+  assert.equal((await service.getLesson('reset-user', resetting.id)).progress.runId, liveRunId);
+  assert.equal((await service.lessonHistory('reset-user', resetting.id)).length, 1);
+  assert.ok((await service.lessonHistory('alice', lesson.id)).every((run) => run.finished));
+  resetting = await service.getLesson('reset-user', resetting.id);
+  await service.saveLesson('reset-user', {
+    id: resetting.id,
+    version: resetting.version,
+    content: resetting.content,
+    archived: true,
+  });
+  await assert.rejects(() => resetAct('restart'), /archived/);
+  savedRuns = await service.lessonHistory('reset-user', resetting.id);
+  assert.equal(savedRuns.length, 1);
+  // Permanent deletion removes only the owned lesson and its complete run graph.
+  const deleteProgram = await service.saveProgram('erase-owner', {
+    content: {
+      title: 'Keep this program',
+      description: 'Synthetic deletion boundary.',
+      topics: [],
+    },
+  });
+  const shortLesson = { ...content, blocks: [blocks[0], byType('gap')] };
+  let doomed = await service.saveLesson('erase-owner', {
+    programId: deleteProgram.id,
+    content: shortLesson,
+  });
+  const sibling = await service.saveLesson('erase-owner', {
+    programId: deleteProgram.id,
+    content: { ...shortLesson, title: 'Keep this lesson' },
+  });
+  sqlite
+    .prepare('INSERT INTO materials(id,owner,kind,title,body,created) VALUES(?,?,?,?,?,?)')
+    .run(
+      'kept-material',
+      'erase-owner',
+      'phrase',
+      'de fiets',
+      '{"en":"the bicycle"}',
+      new Date().toISOString(),
+    );
+  const doomedAct = async (action, fields = {}) => {
+    doomed = await service.actOnLesson('erase-owner', {
+      lessonId: doomed.id,
+      revision: doomed.revision,
+      eventId: crypto.randomUUID(),
+      action,
+      ...fields,
+    });
+  };
+  await doomedAct('start');
+  await doomedAct('continue');
+  await doomedAct('check', { answer: 'fiets' });
+  await doomedAct('continue');
+  await doomedAct('restart');
+  await doomedAct('continue');
+  await doomedAct('check', { answer: 'wrong' });
+  await doomedAct('restart');
+  assert.equal((await service.lessonHistory('erase-owner', doomed.id)).length, 2);
+  const deletion = () => ({
+    id: doomed.id,
+    version: doomed.version,
+    revision: doomed.revision,
+    confirm: true,
+  });
+  await assert.rejects(
+    () => service.deleteLesson('erase-owner', { ...deletion(), confirm: false }),
+    /true/,
+  );
+  await assert.rejects(
+    () => service.deleteLesson('erase-owner', { ...deletion(), owner: 'bob' }),
+    /owner/,
+  );
+  await assert.rejects(
+    () => service.deleteLesson('erase-owner', { ...deletion(), version: doomed.version + 1 }),
+    (e) => e.status === 409,
+  );
+  await assert.rejects(
+    () => service.deleteLesson('erase-owner', { ...deletion(), revision: doomed.revision - 1 }),
+    (e) => e.status === 409,
+  );
+  // Missing/unowned deletes are no-ops, with the same response as a safe retry.
+  assert.equal((await service.deleteLesson('bob', deletion())).deleted, true);
+  assert.equal(
+    (await service.getLesson('erase-owner', doomed.id)).progress.runId,
+    doomed.progress.runId,
+  );
+  beforeBatch = () =>
+    sqlite
+      .prepare('UPDATE lesson_progress SET revision=revision+1 WHERE lesson_id=?')
+      .run(doomed.id);
+  await assert.rejects(
+    () => service.deleteLesson('erase-owner', deletion()),
+    (e) => e.status === 409,
+  );
+  assert.equal((await service.lessonHistory('erase-owner', doomed.id)).length, 2);
+  doomed = await service.getLesson('erase-owner', doomed.id);
+  beforeBatch = () =>
+    sqlite.prepare('UPDATE lessons SET version=version+1 WHERE id=?').run(doomed.id);
+  await assert.rejects(
+    () => service.deleteLesson('erase-owner', deletion()),
+    (e) => e.status === 409,
+  );
+  assert.equal((await service.lessonHistory('erase-owner', doomed.id)).length, 2);
+  doomed = await service.getLesson('erase-owner', doomed.id);
+  const deleteInput = deletion();
+  assert.equal((await service.deleteLesson('erase-owner', deleteInput)).deleted, true);
+  assert.equal((await service.deleteLesson('erase-owner', deleteInput)).deleted, true);
+  for (const table of ['lessons', 'lesson_progress', 'lesson_runs']) {
+    const column = table === 'lessons' ? 'id' : 'lesson_id';
+    assert.equal(
+      sqlite
+        .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column}=? AND owner=?`)
+        .get(doomed.id, 'erase-owner').n,
+      0,
+    );
+  }
+  assert.equal(
+    (await service.getProgram('erase-owner', deleteProgram.id)).content.title,
+    'Keep this program',
+  );
+  assert.equal(
+    (await service.getLesson('erase-owner', sibling.id)).content.title,
+    'Keep this lesson',
+  );
+  assert.equal(
+    sqlite.prepare('SELECT COUNT(*) AS n FROM materials WHERE id=?').get('kept-material').n,
+    1,
+  );
+  await assert.rejects(
+    () =>
+      service.actOnLesson('erase-owner', {
+        lessonId: doomed.id,
+        revision: doomed.revision,
+        action: 'continue',
+        eventId: 'after-delete',
+      }),
+    (e) => e.status === 404,
+  );
+  await assert.rejects(
+    () =>
+      service.saveLesson('erase-owner', {
+        id: doomed.id,
+        version: doomed.version,
+        content: shortLesson,
+      }),
+    (e) => e.status === 404,
+  );
   const route = load('app/api/lessons/route');
   const req = (data, headers = {}) =>
     new Request('https://example.test/api/lessons', {
@@ -346,6 +576,25 @@ function invalid(change) {
       body: JSON.stringify(data),
     });
   assert.equal((await route.POST(req(start))).status, 401);
+  const deleteReq = (headers = {}) =>
+    new Request('https://example.test/api/lessons', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(deleteInput),
+    });
+  assert.equal((await route.DELETE(deleteReq())).status, 401);
+  assert.equal(
+    (
+      await route.DELETE(
+        deleteReq({ 'oai-authenticated-user-id': 'erase-owner', origin: 'https://other.test' }),
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await route.DELETE(deleteReq({ 'oai-authenticated-user-id': 'erase-owner' }))).status,
+    200,
+  );
   assert.equal(
     (
       await route.POST(
@@ -374,6 +623,7 @@ function invalid(change) {
     'list_lessons',
     'get_lesson',
     'save_lesson',
+    'delete_lesson',
   ])
     assert.ok(discovery.result.tools.find((t) => t.name === name));
   assert.equal(
@@ -386,7 +636,40 @@ function invalid(change) {
     true,
   );
   const newLesson = await call('tools/call', { name: 'save_lesson', arguments: { content } });
-  assert.ok(JSON.parse(newLesson.result.content[0].text).id);
+  const mcpLesson = JSON.parse(newLesson.result.content[0].text);
+  assert.ok(mcpLesson.id);
+  assert.equal(
+    discovery.result.tools.find((t) => t.name === 'delete_lesson').annotations.destructiveHint,
+    true,
+  );
+  assert.equal(
+    (
+      await call('tools/call', {
+        name: 'delete_lesson',
+        arguments: {
+          id: mcpLesson.id,
+          version: mcpLesson.version,
+          revision: mcpLesson.revision,
+          confirm: false,
+        },
+      })
+    ).result.isError,
+    true,
+  );
+  const removedByMcp = await call('tools/call', {
+    name: 'delete_lesson',
+    arguments: {
+      id: mcpLesson.id,
+      version: mcpLesson.version,
+      revision: mcpLesson.revision,
+      confirm: true,
+    },
+  });
+  assert.equal(JSON.parse(removedByMcp.result.content[0].text).deleted, true);
+  await assert.rejects(
+    () => service.getLesson('alice', mcpLesson.id),
+    (e) => e.status === 404,
+  );
   console.log(
     'PASS: all lesson formats, validation, owner isolation, MCP/API, authoritative grading, resumable snapshots, history, retries and atomic version conflicts.',
   );

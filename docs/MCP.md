@@ -18,6 +18,7 @@ When the owner publishes the Site, Sites provisions its personal plugin. Open th
 | `list_lessons`    | List lesson summaries and progress, optionally filtered by program.       |
 | `get_lesson`      | Read complete lesson content and the saved run.                           |
 | `save_lesson`     | Create or replace a validated lesson without changing existing runs.      |
+| `delete_lesson`   | Permanently delete a confirmed lesson, its progress and saved runs.       |
 
 Phrase bodies can include `en`, `example`, `exampleTranslation`, `notes`, `original` and `source`. Text bodies include `source` and `segments: [{nl, en}]`. Use `practiceMode: words`, `sentences` or `off` for phrases; practice requires an English meaning.
 
@@ -38,6 +39,14 @@ and `topicId` (both nullable), `order`, and `content: {title, description, goal,
 level?, blocks}`. Omit `id` and `version` to create. Include both, the complete content,
 associations and desired `archived` state to update. Do not regenerate stable block IDs.
 Missing optional associations default to standalone, so preserve them on updates.
+
+For permanent deletion, first read `get_lesson`, then use `delete_lesson` with
+`{id, version, revision, confirm: true}`. This is a destructive operation: only call
+it when the user has explicitly requested permanent deletion of that lesson. It
+removes all of that lesson's progress and run history and cannot be undone; it does
+not archive the lesson. Programs, other lessons and collection entries are preserved.
+On a content/progress conflict, reload and obtain confirmation again. Repeating a
+successful delete is a no-op and does not disclose another owner's records.
 
 `tools/list` exposes the complete block schemas. Available blocks are `explanation`,
 `table`, `diagram`, `image`, `flashcard`, `choice`, `letters`, `words`, `match` and `gap`.

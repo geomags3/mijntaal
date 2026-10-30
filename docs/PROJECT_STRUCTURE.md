@@ -263,11 +263,15 @@ There is no automatic two-way synchronization between a deployed Site and this l
 exercise controls, feedback, resume/retry actions and completed run history. It is
 mounted through `app/page.tsx` and the shared header's Lessons destination.
 `lib/lessons.ts` owns the shared schemas, normalization and deterministic answer/state
-rules. `lib/server/lessons.ts` supplies owner-scoped authoring, version checks,
+rules. `lib/sample-lesson.ts` reuses those answer rules for the unsaved empty-library
+sample, with a separate ID and no server calls. `lib/server/lessons.ts` supplies owner-scoped authoring, version checks,
 transactional progress updates and immutable completed runs. Browser adapters live
 under `app/api/programs/route.ts` and `app/api/lessons/route.ts`; MCP calls the same
 authoring service. D1 tables are `lesson_programs`, `lessons`, `lesson_progress` and
 `lesson_runs`. See [LESSONS.md](LESSONS.md) for the contract and current limits.
+The lesson service also handles confirmed permanent deletion, atomically checking
+the content version and progress revision before removing only that owner's lesson
+and its runs. The browser and MCP use the same deletion rules.
 
 ## Where to make a change
 
