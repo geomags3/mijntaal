@@ -63,14 +63,12 @@ vm.runInNewContext(
   },
 );
 const sounds = new output.PracticeSounds();
-sounds.play('correct');
+sounds.play();
 assert.equal(nodes.length, 0, 'no implicit autoplay context');
 sounds.unlock();
-sounds.play('tap');
-sounds.play('correct');
-sounds.play('wrong');
+sounds.play();
 assert.equal(contexts.length, 1);
-assert.equal(nodes.length, 4);
+assert.equal(nodes.length, 2);
 for (const node of nodes) {
   assert.ok(node.stopAt - node.startAt < 0.13, 'short, bounded tones');
   node.onended();
@@ -79,11 +77,11 @@ for (const node of nodes) {
 Context.prototype.createOscillator = () => {
   throw Error('device unavailable');
 };
-assert.doesNotThrow(() => sounds.play('correct'), 'device failure cannot interrupt grading');
+assert.doesNotThrow(() => sounds.play(), 'device failure cannot interrupt grading');
 sounds.dispose();
 assert.equal(contexts[0].state, 'closed');
-sounds.play('correct');
-assert.equal(nodes.length, 4);
+sounds.play();
+assert.equal(nodes.length, 2);
 console.log(
   'PASS: brief, low-volume device-only effects share one gesture-unlocked context and release audio nodes.',
 );

@@ -71,6 +71,7 @@ let slots = [],
   stateCount = 0,
   refs = [],
   refCount = 0,
+  successSounds = [],
   autoReads = [],
   audioEffects = [];
 const hooks = {
@@ -125,6 +126,9 @@ vm.runInNewContext(
           default: () => ({
             state: 'idle',
             play() {},
+            sound() {
+              successSounds.push('correct');
+            },
             autoPlay(text) {
               autoReads.push(text);
               return true;
@@ -170,6 +174,7 @@ const render = () => {
   });
 };
 let node = render();
+assert.equal(successSounds.length, 0);
 const j = { base: result, events: [] };
 refs[0].current = j;
 refs[4].current = 'ui-owner';
@@ -179,6 +184,7 @@ find(node, (n) => n.type === 'button' && n.props.children === 'Choices').props.o
 node = render();
 assert.ok(find(node, (n) => n.props?.className === 'words-options'));
 assert.equal(refs[0].current.events[0].action, 'mode');
+assert.equal(successSounds.length, 0, 'changing answer format stays silent');
 find(node, (n) => n.type === 'button' && n.props.children === 'Letters').props.onClick();
 node = render();
 assert.ok(find(node, (n) => n.props?.className === 'words-bank'));
@@ -191,6 +197,7 @@ node = render();
 find(node, (n) => n.type === 'form').props.onSubmit({ preventDefault() {} });
 node = render();
 assert.ok(find(node, (n) => n.props?.className === 'words-feedback '));
+assert.deepEqual(successSounds, ['correct'], 'a correct answer plays one chime');
 assert.ok(find(node, (n) => n.props?.className === 'words-next-review'));
 assert.equal(
   load('lib/words-journal').journalView(refs[0].current).session.units[0].state.intervalDays,
@@ -288,3 +295,28 @@ assert.deepEqual(checkAuto(audioQuestion, null, true), []);
 console.log(
   'PASS: automatic Dutch reading is once per card, muted by preference and never reveals a hidden answer.',
 );
+
+function checkAnswerSound(answer, enabled) {
+  slots = [];
+  refs = [];
+  successSounds = [];
+  result.session = {
+    ...session,
+    question: { ...audioQuestion, kind: 'typing', direction: 'en-nl' },
+    feedback: null,
+    preferences: { ...words.defaultWordPreferences, soundEffects: enabled },
+  };
+  let tree = render();
+  refs[0].current = { base: result, events: [] };
+  refs[4].current = 'ui-owner';
+  storage.set('words-journal:ui-owner', JSON.stringify(refs[0].current));
+  find(tree, (n) => n.type === 'input' && n.props.placeholder === 'Type in Dutch…').props.onChange({
+    target: { value: answer },
+  });
+  tree = render();
+  find(tree, (n) => n.type === 'form').props.onSubmit({ preventDefault() {} });
+  return successSounds;
+}
+assert.deepEqual(checkAnswerSound('wrong answer', true), [], 'incorrect answers stay silent');
+assert.deepEqual(checkAnswerSound('de polder', false), [], 'muted correct answers stay silent');
+assert.deepEqual(checkAnswerSound('de polder', true), ['correct']);

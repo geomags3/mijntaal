@@ -115,7 +115,7 @@ export default function WordsSettings({ onSaved }: { onSaved?: (value: WordPrefe
           checked={value.soundEffects}
           onChange={(e) => setValue({ ...value, soundEffects: e.target.checked })}
         />
-        Gentle practice sounds
+        Sound for correct answers
       </label>
       <p className="settings-copy">
         Recordings are prepared before the round. Automatic reading never reveals a hidden Dutch

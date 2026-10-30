@@ -368,7 +368,6 @@ export default function WordsPractice({
     if (validating || lock.current || pending) return;
     lock.current = true;
     if (audioReady && audioOptions.autoPlayAudio) pronunciation.unlock?.();
-    if (audioOptions.soundEffects) pronunciation.sound?.('tap');
     setBusy(true);
     setError('');
     setPreparationWarning('');
@@ -410,12 +409,12 @@ export default function WordsPractice({
       const next = journalAppend(journal.current, action, text, seconds.current);
       retain(next);
       const view = journalView(next);
-      if (audioOptions.soundEffects && action === 'answer' && view.session?.feedback) {
-        const outcome = view.session.feedback.outcome;
-        pronunciation.sound?.(
-          outcome === 'correct' || outcome === 'supported' ? 'correct' : 'wrong',
-        );
-      }
+      if (
+        audioOptions.soundEffects &&
+        action === 'answer' &&
+        ['correct', 'supported'].includes(view.session?.feedback?.outcome || '')
+      )
+        pronunciation.sound?.();
       if (view.session?.closed) {
         setSummary(view.session);
         setActive(false);
@@ -671,17 +670,7 @@ export default function WordsPractice({
           Saved round · previous schedule. Finish this round to use daily reviews.
         </p>
       )}
-      <section
-        className="words-card"
-        aria-label="Word exercise"
-        onClickCapture={(event) => {
-          if (
-            audioOptions.soundEffects &&
-            (event.target as HTMLElement).closest('button:not(:disabled)')
-          )
-            pronunciation.sound?.('tap');
-        }}
-      >
+      <section className="words-card" aria-label="Word exercise">
         <div className="words-top">
           <LearningProgress progress={learningProgress(unit.state, session.day)} />
           <span>

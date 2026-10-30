@@ -100,9 +100,9 @@ export default function useWordAudio(
   function autoPlay(text: string) {
     return player.current?.playPrepared(text) || false;
   }
-  function sound(kind: 'tap' | 'correct' | 'wrong') {
-    sounds.current?.unlock();
-    sounds.current?.play(kind);
+  function sound() {
+    const current = sounds.current;
+    void current?.unlock().then(() => current.play());
   }
   return { state, play, unlock, prepare, autoPlay, sound };
 }

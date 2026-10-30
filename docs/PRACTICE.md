@@ -90,7 +90,7 @@ In **Settings → Words practice**:
 - **Preferred answer mode:** Auto, Type, Letters or Choices.
 - **Repeat mistakes once later in the round:** on by default.
 - **Automatically read visible Dutch words:** on by default. Reads introductions, Dutch prompts and revealed Dutch answers; never reads a hidden answer to an English prompt or marks a hint.
-- **Gentle practice sounds:** on by default. Quiet local button tones and answer feedback; independent of pronunciation and no provider requests.
+- **Sound for correct answers:** on by default. A quiet local chime for correct answers (including answers with help); button presses and incorrect answers stay silent. It is independent of pronunciation and makes no provider requests.
 
 Settings apply to new rounds. Rounds can be shorter when less material is eligible. An answered entry normally waits until its next due day, with the optional error retry as an exception.
 
