@@ -16,7 +16,7 @@ import type { AnswerMode } from '../../lib/practice-input';
 import { assembleBlocks } from '../../lib/practice-input';
 import { learningProgress } from '../../lib/word-progress';
 import type { WordAction, WordSession } from '../../lib/words';
-import { wordBuildTokens } from '../../lib/words';
+import { defaultWordPreferences, wordBuildTokens } from '../../lib/words';
 import type { Journal } from '../../lib/words-journal';
 import {
   journalAck,
@@ -36,7 +36,7 @@ type Result = {
   due?: number;
   newCount?: number;
   waitingNew?: number;
-  preferences?: { sessionSize?: number };
+  preferences?: Partial<import('../../lib/words').WordPreferences>;
 };
 export async function wordsRequest(data?: any): Promise<Result> {
   if (!data)
@@ -108,7 +108,8 @@ export default function WordsPractice({
     lock = useRef(false),
     input = useRef<HTMLInputElement>(null);
   const [buildMode, setBuildMode] = useState<AnswerMode>('blocks'),
-    [audioError, setAudioError] = useState('');
+    [audioError, setAudioError] = useState(''),
+    [preparationWarning, setPreparationWarning] = useState('');
   const resumable = !!data?.session && !data.session.closed && !!data.session.question;
   const session = data?.session,
     q = session?.question,
@@ -117,6 +118,39 @@ export default function WordsPractice({
     tokens = q?.kind === 'build' && unit ? wordBuildTokens(unit.nl, q.id) : [];
   const pronunciation = useWordAudio(audioScope, q?.id || '', visible, setAudioError);
   useEffect(() => setAudioError(''), [q?.id]);
+  const audioOptions = { ...defaultWordPreferences, ...data?.preferences, ...session?.preferences };
+  const autoRead = !!q && (q.kind === 'intro' || q.direction === 'nl-en' || !!feedback);
+  const spokenCard = useRef('');
+  useEffect(() => {
+    if (
+      !visible ||
+      !active ||
+      busy ||
+      conflict ||
+      !audioReady ||
+      !audioOptions.autoPlayAudio ||
+      !autoRead ||
+      !unit ||
+      !q
+    )
+      return;
+    const key = audioScope + ':' + q.id;
+    if (spokenCard.current === key) return;
+    spokenCard.current = key;
+    if (document.visibilityState === 'visible') pronunciation.autoPlay?.(unit.nl);
+  }, [
+    visible,
+    active,
+    busy,
+    conflict,
+    audioReady,
+    audioOptions.autoPlayAudio,
+    autoRead,
+    q,
+    unit,
+    pronunciation,
+    audioScope,
+  ]);
   function retain(j: Journal) {
     if (!scope.current) throw Error('Practice storage is not ready.');
     const key = 'words-journal:' + scope.current;
@@ -333,13 +367,29 @@ export default function WordsPractice({
   async function start() {
     if (validating || lock.current || pending) return;
     lock.current = true;
+    if (audioReady && audioOptions.autoPlayAudio) pronunciation.unlock?.();
+    if (audioOptions.soundEffects) pronunciation.sound?.('tap');
     setBusy(true);
     setError('');
+    setPreparationWarning('');
     try {
       const result = await request({
         action: 'start',
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Amsterdam',
       });
+      const options = {
+        ...defaultWordPreferences,
+        ...result.preferences,
+        ...result.session?.preferences,
+      };
+      if (audioReady && options.autoPlayAudio && result.session) {
+        const missing = await pronunciation.prepare?.(result.session.units.map((u) => u.nl));
+        if (missing)
+          setPreparationWarning(
+            'Some recordings could not be prepared. Use Listen to Dutch to retry.',
+          );
+      }
+      if (!mounted.current) return;
       retain({ base: { ...data, ...result }, events: [] });
       seconds.current = result.session?.elapsed || 0;
       setElapsed(seconds.current);
@@ -360,6 +410,12 @@ export default function WordsPractice({
       const next = journalAppend(journal.current, action, text, seconds.current);
       retain(next);
       const view = journalView(next);
+      if (audioOptions.soundEffects && action === 'answer' && view.session?.feedback) {
+        const outcome = view.session.feedback.outcome;
+        pronunciation.sound?.(
+          outcome === 'correct' || outcome === 'supported' ? 'correct' : 'wrong',
+        );
+      }
       if (view.session?.closed) {
         setSummary(view.session);
         setActive(false);
@@ -547,9 +603,11 @@ export default function WordsPractice({
               onClick={start}
             >
               {busy ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}{' '}
-              {data?.session && !data.session.closed && data.session.question
-                ? 'Resume session'
-                : 'Start Words'}
+              {busy && audioReady && audioOptions.autoPlayAudio
+                ? 'Preparing round and audio…'
+                : data?.session && !data.session.closed && data.session.question
+                  ? 'Resume session'
+                  : 'Start Words'}
             </button>
           )}
           {!!data?.total &&
@@ -613,7 +671,17 @@ export default function WordsPractice({
           Saved round · previous schedule. Finish this round to use daily reviews.
         </p>
       )}
-      <section className="words-card" aria-label="Word exercise">
+      <section
+        className="words-card"
+        aria-label="Word exercise"
+        onClickCapture={(event) => {
+          if (
+            audioOptions.soundEffects &&
+            (event.target as HTMLElement).closest('button:not(:disabled)')
+          )
+            pronunciation.sound?.('tap');
+        }}
+      >
         <div className="words-top">
           <LearningProgress progress={learningProgress(unit.state, session.day)} />
           <span>
@@ -660,9 +728,9 @@ export default function WordsPractice({
             </button>
           )}
         </div>
-        {audioError && (
+        {(audioError || preparationWarning) && (
           <p className="words-audio-error" role="alert">
-            {audioError}
+            {audioError || preparationWarning}
           </p>
         )}
         {q.kind === 'intro' && (

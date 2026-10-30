@@ -70,7 +70,9 @@ let slots = [],
   cursor = 0,
   stateCount = 0,
   refs = [],
-  refCount = 0;
+  refCount = 0,
+  autoReads = [],
+  audioEffects = [];
 const hooks = {
   useState(initial) {
     const n = cursor++,
@@ -97,7 +99,10 @@ const hooks = {
     refs[ordinal] = slots[n];
     return slots[n];
   },
-  useEffect() {},
+  useEffect(fn) {
+    // Run just the audio effect; unrelated network/timer effects stay isolated.
+    if (String(fn).includes('spokenCard.current')) audioEffects.push(fn);
+  },
 };
 const exportsObject = {};
 vm.runInNewContext(
@@ -115,7 +120,17 @@ vm.runInNewContext(
     exports: exportsObject,
     require(n) {
       if (n === 'react') return hooks;
-      if (n.includes('use-word-audio')) return { default: () => ({ state: 'idle', play() {} }) };
+      if (n.includes('use-word-audio'))
+        return {
+          default: () => ({
+            state: 'idle',
+            play() {},
+            autoPlay(text) {
+              autoReads.push(text);
+              return true;
+            },
+          }),
+        };
       if (n.includes('client-data')) return { clientData: { peek() {} } };
       if (n.endsWith('words-journal')) return load('lib/words-journal');
       if (n.endsWith('/words')) return words;
@@ -128,6 +143,7 @@ vm.runInNewContext(
     sessionStorage: { getItem: (k) => drafts.get(k) || null, setItem: (k, v) => drafts.set(k, v) },
     structuredClone,
     crypto,
+    document: { visibilityState: 'visible' },
     queueMicrotask,
   },
 );
@@ -235,4 +251,40 @@ assert.equal(
 );
 console.log(
   'PASS: intro shows Continue and Already know without a review date; both actions work through the actual UI journal, retaining the due date until an answer.',
+);
+
+// Automatic reading respects visible Dutch, answer secrecy, once-per-card and mute.
+function checkAuto(question, feedback = null, muted = false) {
+  slots = [];
+  audioEffects = [];
+  autoReads = [];
+  const previous = result.session;
+  result.session = {
+    ...session,
+    question,
+    feedback,
+    preferences: { ...words.defaultWordPreferences, autoPlayAudio: !muted },
+  };
+  render();
+  audioEffects.forEach((fn) => fn());
+  audioEffects.forEach((fn) => fn());
+  result.session = previous;
+  return autoReads;
+}
+const audioQuestion = {
+  id: 'audio-q',
+  unitId: u.id,
+  kind: 'choice',
+  direction: 'nl-en',
+  options: [],
+  tokens: [],
+};
+assert.deepEqual(checkAuto(audioQuestion), [u.nl]);
+assert.deepEqual(checkAuto({ ...audioQuestion, direction: 'en-nl' }), []);
+assert.deepEqual(checkAuto({ ...audioQuestion, direction: 'en-nl' }, { outcome: 'correct' }), [
+  u.nl,
+]);
+assert.deepEqual(checkAuto(audioQuestion, null, true), []);
+console.log(
+  'PASS: automatic Dutch reading is once per card, muted by preference and never reveals a hidden answer.',
 );

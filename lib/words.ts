@@ -66,6 +66,8 @@ export const wordPreferencesSchema = z
     newWordsPerDay: z.number().int().min(0).max(100).default(10),
     answerMode: z.enum(['auto', 'typing', 'letters', 'choices']).default('auto'),
     repeatMistakes: z.boolean().default(true),
+    autoPlayAudio: z.boolean().default(true),
+    soundEffects: z.boolean().default(true),
   })
   .strict();
 export const defaultWordPreferences = wordPreferencesSchema.parse({});

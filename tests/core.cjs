@@ -61,6 +61,7 @@ const env = {
   },
 };
 const requests = [];
+let audioBackground = null;
 let responseMode = 'ok';
 let sent = [];
 let finishAudio;
@@ -249,7 +250,13 @@ function load(relative) {
     {
       exports: output,
       require(name) {
-        if (name === 'cloudflare:workers') return { env };
+        if (name === 'cloudflare:workers')
+          return {
+            env,
+            get waitUntil() {
+              return audioBackground ? (task) => audioBackground.push(task) : undefined;
+            },
+          };
         if (name.startsWith('.'))
           return load(path.relative(root, path.resolve(path.dirname(file), name)));
         return require(name);
@@ -1892,6 +1899,59 @@ console.log(
     /rejected/,
   );
   assert.equal((await eleven.elevenStatus(eu)).audioReady, true);
+  audioBackground = [];
+  const savedAudio = await materials.addMaterial(eu, {
+    kind: 'phrase',
+    title: 'fiets',
+    body: { article: 'de', en: 'bicycle', partOfSpeech: 'noun' },
+  });
+  assert.equal(audioBackground.length, 1, 'collection save schedules recording');
+  await Promise.all(audioBackground);
+  const beforeSavedPlay = requests.length;
+  assert.equal((await eleven.elevenSpeech(eu, 'de fiets')).headers.get('X-Audio-Cache'), 'hit');
+  assert.equal(
+    requests.length,
+    beforeSavedPlay,
+    'saved noun includes article and already has audio',
+  );
+  audioBackground = [];
+  await materials.updateMaterial(eu, {
+    id: savedAudio.id,
+    version: 1,
+    title: 'het huis',
+    body: { article: 'het', en: 'house' },
+  });
+  await Promise.all(audioBackground);
+  assert.equal((await eleven.elevenSpeech(eu, 'het huis')).headers.get('X-Audio-Cache'), 'hit');
+  audioBackground = [];
+  await materials.addMaterial('no-audio-account', {
+    kind: 'phrase',
+    title: 'Ik fiets.',
+    body: { en: 'I cycle.' },
+  });
+  await Promise.all(audioBackground);
+  assert.equal(
+    (await materials.listMaterials('no-audio-account')).length,
+    1,
+    'missing credentials never prevent a save',
+  );
+  audioBackground = [];
+  const savedSentence = await materials.addMaterial(eu, {
+    kind: 'phrase',
+    title: 'Ik fiets naar huis.',
+    practiceMode: 'sentences',
+    body: { en: 'I cycle home.' },
+  });
+  await Promise.all(audioBackground);
+  assert.equal(
+    (await eleven.elevenSpeech(eu, 'Ik fiets naar huis.')).headers.get('X-Audio-Cache'),
+    'hit',
+  );
+  audioBackground = [];
+  await materials.updateMaterial(eu, { id: savedSentence.id, version: 1, archived: true });
+  await materials.addMaterial(eu, { kind: 'note', title: 'No audio note', body: {} });
+  assert.equal(audioBackground.length, 0, 'notes and archived entries do not schedule recordings');
+  audioBackground = null;
   const et = await materials.addMaterial(eu, {
     kind: 'text',
     title: 'Connected audio',

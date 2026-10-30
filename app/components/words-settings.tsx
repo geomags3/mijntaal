@@ -99,6 +99,28 @@ export default function WordsSettings({ onSaved }: { onSaved?: (value: WordPrefe
         />
         Repeat mistakes once later in the round
       </label>
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          disabled={loading || saving}
+          checked={value.autoPlayAudio}
+          onChange={(e) => setValue({ ...value, autoPlayAudio: e.target.checked })}
+        />
+        Automatically read visible Dutch words
+      </label>
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          disabled={loading || saving}
+          checked={value.soundEffects}
+          onChange={(e) => setValue({ ...value, soundEffects: e.target.checked })}
+        />
+        Gentle practice sounds
+      </label>
+      <p className="settings-copy">
+        Recordings are prepared before the round. Automatic reading never reveals a hidden Dutch
+        answer. Sound effects are made on your device.
+      </p>
       <p className="settings-copy">
         You can change the answer mode on each Dutch-answer card. Choices require four suitable
         answers; otherwise Letters is used.

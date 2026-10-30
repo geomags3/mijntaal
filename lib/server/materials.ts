@@ -1,3 +1,6 @@
+import { waitUntil } from 'cloudflare:workers';
+import { wordContent } from '../words';
+import { elevenSpeech } from './eleven-speech';
 import { z } from 'zod';
 import { AppError, db } from './common';
 import { attachLearningProgress } from './word-progress';
@@ -70,6 +73,22 @@ function checkPractice(mode: string | undefined, kind: string, body: any) {
   if (mode === 'sentences' && String(body.en).length > 5000)
     throw new AppError('Keep the English meaning under 5,000 characters.');
 }
+/** Collection writes finish even if optional provider preparation fails. */
+function prepareMaterialAudio(
+  user: string,
+  item: { kind: string; title: string; body: Record<string, unknown> },
+) {
+  if (item.kind !== 'phrase' || item.body._archived || typeof waitUntil !== 'function') return;
+  const text = JSON.parse(wordContent(item)).nl;
+  if (!text || text.length > 1500) return;
+  waitUntil(
+    elevenSpeech(user, text)
+      .then(() => {})
+      .catch(() => {
+        // Manual playback or the next round can retry; never discard a saved entry.
+      }),
+  );
+}
 export async function addMaterial(user: string, input: any) {
   const parsed = materialSchema.safeParse(input);
   if (!parsed.success) throw new AppError('Add a title and choose a valid material type.');
@@ -85,8 +104,10 @@ export async function addMaterial(user: string, input: any) {
     )
     .bind(user, b.kind, b.title, typeof b.body.en === 'string' ? b.body.en : '')
     .first();
-  if (existing)
+  if (existing) {
+    prepareMaterialAudio(user, { ...b, body: JSON.parse(existing.body) });
     return { id: existing.id, duplicate: true, version: JSON.parse(existing.body)._version || 0 };
+  }
   const id = crypto.randomUUID(),
     now = new Date().toISOString();
   const clean = {
@@ -103,6 +124,7 @@ export async function addMaterial(user: string, input: any) {
       .prepare('INSERT INTO review_state(material_id,owner,rank,active,updated) VALUES(?,?,?,?,?)')
       .bind(id, user, 0, mode && mode !== 'off' ? 1 : 0, now),
   ]);
+  prepareMaterialAudio(user, { ...b, body: clean });
   return { id, version: 1 };
 }
 export async function updateMaterial(user: string, input: any) {
@@ -154,6 +176,7 @@ export async function updateMaterial(user: string, input: any) {
   } catch {
     throw new AppError('This entry changed. Reload it before saving.', 409);
   }
+  prepareMaterialAudio(user, { ...b, body: next });
   return { id: input.id, version: next._version };
 }
 

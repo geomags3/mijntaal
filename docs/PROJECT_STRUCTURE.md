@@ -140,7 +140,7 @@ For the user-facing explanation of practice goals, modes, learning stages, inter
 - [server/texts.ts](../lib/server/texts.ts) reads and edits stored texts, resolves stable segment identities, translates segments and dispatches audio preparation. [server/text-audio.ts](../lib/server/text-audio.ts) prepares ElevenLabs text recordings, timing metadata and sentence clips in R2.
 - [server/eleven-speech.ts](../lib/server/eleven-speech.ts) manages ElevenLabs requests and pronunciation caching. The current `/api/speech` route uses this service.
 - [server/speech.ts](../lib/server/speech.ts) retains OpenAI speech/realtime and legacy audio helpers. Their presence does not mean the current pronunciation UI uses OpenAI. `server/texts.ts` also retains a legacy preparation path.
-- [text-player.ts](../lib/text-player.ts) manages browser playback of prepared text fragments and cues. [audio-sequence.ts](../lib/audio-sequence.ts) manages sequential audio, cancellation and prefetching.
+- [text-player.ts](../lib/text-player.ts) manages browser playback of prepared text fragments and cues. [audio-sequence.ts](../lib/audio-sequence.ts) manages sequential audio, cancellation, prefetching and decoded buffers for instant Words autoplay. [practice-sounds.ts](../lib/practice-sounds.ts) synthesizes optional device-local feedback tones.
 - [persistent-audio.ts](../lib/persistent-audio.ts) caches audio in browser IndexedDB; [pcm.ts](../lib/pcm.ts) handles PCM/WAV conversion; [speech-text.ts](../lib/speech-text.ts) normalizes speech input.
 
 ### Settings and backups

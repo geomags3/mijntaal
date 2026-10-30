@@ -73,6 +73,14 @@ On an error, Build returns to Recognize; Recall/Review returns to Build; Recogni
 
 The checker uses saved answers and available accepted Dutch alternatives. It ignores case, repeated spaces and supported surrounding punctuation; spelling, articles and word order still matter. Manual acceptance does not permanently add a new translation.
 
+### Prepared pronunciation
+
+Saving or editing a collection word or standalone sentence schedules ElevenLabs audio preparation after the database write, including saves through MCP. The exact saved Dutch form (including noun articles) is used. Completed WAVs persist in R2, keyed by owner, content, provider, model and voice scope. Saving still succeeds if credentials are absent or the provider fails; no recording is created for notes, archived entries or entire Texts documents through this path. Texts retain their existing recording workflow. Entries over the speech endpoint's 1,500-character limit retain manual validation.
+
+With automatic reading enabled, Start/Resume unlocks browser audio, then prepares and decodes the round's recordings before opening it. Older entries without a recording are generated here, with at most two concurrent requests and a 20-second browser preparation budget. Completed audio is also cached on the device. A Dutch card plays an already decoded buffer: its appearance triggers no network request, cache read or generation. Missing recordings are skipped, with a retry message and the existing manual Listen control. Preparation is best effort rather than a durable job queue; failed background work is retried on the next save, round preparation or manual play.
+
+Browsers can still block automatic audio or suspend it after a device interruption. Use Listen to restore playback. A restored unsynced round keeps its journal and can use manual playback; it never regenerates audio solely because a card was restored. Changing owner or voice clears prepared buffers. Autoplay stops on card changes, leaving Words or unmounting. Sound effects use short, low-volume Web Audio tones and respect their separate preference.
+
 ### Settings and progress
 
 In **Settings → Words practice**:
@@ -81,6 +89,8 @@ In **Settings → Words practice**:
 - **New words per day:** default 10, range 0–100, shared across rounds that day. Set 0 to practise only started entries.
 - **Preferred answer mode:** Auto, Type, Letters or Choices.
 - **Repeat mistakes once later in the round:** on by default.
+- **Automatically read visible Dutch words:** on by default. Reads introductions, Dutch prompts and revealed Dutch answers; never reads a hidden answer to an English prompt or marks a hint.
+- **Gentle practice sounds:** on by default. Quiet local button tones and answer feedback; independent of pronunciation and no provider requests.
 
 Settings apply to new rounds. Rounds can be shorter when less material is eligible. An answered entry normally waits until its next due day, with the optional error retry as an exception.
 

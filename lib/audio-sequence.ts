@@ -11,6 +11,57 @@ export class AudioSequence {
     }
   }
   private context: AudioContext | null = null;
+  private decoded = new Map<string, AudioBuffer>();
+  /** Call from the Start gesture, before awaiting the round request. */
+  unlockPlayback() {
+    if (typeof AudioContext === 'undefined') return;
+    try {
+      if (!this.context || this.context.state === 'closed') this.context = new AudioContext();
+      void this.unlock(this.context);
+    } catch {
+      /* Manual HTML audio remains available. */
+    }
+  }
+  async prepare(text: string, signal?: AbortSignal) {
+    text = text.trim().normalize('NFC');
+    const scope = this.cacheScope;
+    await this.preload(text, signal);
+    if (!this.context || signal?.aborted || scope !== this.cacheScope || this.decoded.has(text))
+      return;
+    const blob = this.blobs.get(text);
+    if (!blob) return;
+    const buffer = await this.context.decodeAudioData(await blob.arrayBuffer());
+    if (!signal?.aborted && scope === this.cacheScope) this.decoded.set(text, buffer);
+  }
+  /** No network, storage reads or decoding when a Dutch card appears. */
+  playPrepared(text: string) {
+    const buffer = this.decoded.get(text.trim().normalize('NFC'));
+    if (!buffer || !this.context || this.context.state !== 'running') return false;
+    try {
+      this.stop();
+      const generation = this.generation;
+      this.running = true;
+      this.usingContext = true;
+      const source = this.context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.context.destination);
+      this.sources.add(source);
+      source.onended = () => {
+        source.disconnect();
+        this.sources.delete(source);
+        if (generation === this.generation) {
+          this.running = false;
+          this.changed(-1, 'idle');
+        }
+      };
+      source.start();
+      this.changed(-1, 'playing');
+      return true;
+    } catch {
+      this.stop();
+      return false;
+    }
+  }
   private sources = new Set<AudioBufferSourceNode>();
   private release: (() => void) | null = null;
   private urls = new Map<string, string>();
@@ -214,7 +265,7 @@ export class AudioSequence {
           const blob = this.blobs.get(text);
           if (!blob) throw Error('The saved audio is unavailable. Please try again.');
           const bytes = await blob.arrayBuffer();
-          const buffer = await context.decodeAudioData(bytes);
+          const buffer = this.decoded.get(text) || (await context.decodeAudioData(bytes));
           if (generation !== this.generation) return;
           const source = context.createBufferSource();
           source.buffer = buffer;
@@ -360,6 +411,7 @@ export class AudioSequence {
     this.urls.forEach((url) => URL.revokeObjectURL(url));
     this.urls.clear();
     this.blobs.clear();
+    this.decoded.clear();
   }
   dispose() {
     this.clearCache();

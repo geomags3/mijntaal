@@ -120,6 +120,24 @@ const watchdog = setTimeout(() => {
   await player.start(['Tot voor kort'], -1);
   assert.equal(requests, 1);
   assert.equal(contexts.length, 1, 'reuse the unlocked context between words');
+  await player.prepare('Tot voor kort');
+  const preparedRequests = requests,
+    preparedDecodes = decodeCalls;
+  assert.equal(player.playPrepared('Tot voor kort'), true);
+  await Promise.resolve();
+  assert.equal(requests, preparedRequests, 'card appearance does not request a recording');
+  assert.equal(decodeCalls, preparedDecodes, 'card appearance does not decode a recording');
+  assert.equal(
+    player.playPrepared('missing'),
+    false,
+    'missing audio never generates during autoplay',
+  );
+  player.setCacheScope('different-owner');
+  assert.equal(
+    player.playPrepared('Tot voor kort'),
+    false,
+    'prepared audio cannot cross owner/voice scopes',
+  );
   player.dispose();
   assert.equal(contexts[0].state, 'closed', 'dispose releases context');
   const restored = new AudioSequence(
