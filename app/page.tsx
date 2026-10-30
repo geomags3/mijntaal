@@ -1,4 +1,6 @@
 'use client';
+import { collectionBookmark } from '../lib/collection-index';
+import useCollectionIndex from './components/use-collection-index';
 import {
   Archive,
   ArrowRight,
@@ -845,6 +847,7 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
     }
   }
 
+  const collectionIndex = useCollectionIndex(tab === 'Search' || tab === 'Texts');
   const detailItem = items.find((x) => x.id === detailsId);
   const collection = useMemo(
     () =>
@@ -1291,11 +1294,15 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                               )}
                             </div>
                             <button
-                              className="icon-button save-meaning"
-                              aria-label={
-                                entry.queryForm ? 'Save this form' : 'Save meaning ' + (i + 1)
-                              }
-                              disabled={saving}
+                              {...collectionBookmark(
+                                collectionIndex,
+                                searchMeaningMaterial(entry, sense, formTranslation).title,
+                                searchMeaningMaterial(entry, sense, formTranslation).body.en,
+                                entry.lemma,
+                                entry.queryForm ? 'Save this form' : 'Save meaning ' + (i + 1),
+                                saving,
+                                'icon-button save-meaning',
+                              )}
                               onClick={() => saveSense(sense)}
                             >
                               <Bookmark size={18} />
@@ -1419,9 +1426,14 @@ export default function App({ initialTab = 'Search' }: { initialTab?: string } =
                               )}
                             </div>
                             <button
-                              className="icon-button"
-                              aria-label={'Save AI meaning ' + (i + 1)}
-                              disabled={saving}
+                              {...collectionBookmark(
+                                collectionIndex,
+                                searchMeaningMaterial(aiEntry, sense).title,
+                                searchMeaningMaterial(aiEntry, sense).body.en,
+                                aiEntry.lemma,
+                                'Save AI meaning ' + (i + 1),
+                                saving,
+                              )}
                               onClick={() => saveSense(sense, aiEntry)}
                             >
                               <Bookmark size={18} />

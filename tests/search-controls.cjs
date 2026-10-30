@@ -131,6 +131,17 @@ vm.runInNewContext(
       };
     },
     require(name) {
+      if (name.includes('use-collection-index'))
+        return { default: () => ({ has: () => false, status: () => 'new' }) };
+      if (name.endsWith('/collection-index'))
+        return {
+          collectionDutch: (title, article) => (article ? article + ' ' + title : title),
+          collectionBookmark: (index, nl, en, lemma, label, busy, className = 'icon-button') => ({
+            className,
+            'aria-label': label,
+            disabled: busy,
+          }),
+        };
       if (name === 'react') return hooks;
       if (name.includes('client-data'))
         return {

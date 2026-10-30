@@ -415,6 +415,23 @@ console.log(
   });
   assert.equal(duplicate.id, a.id);
   assert.equal(duplicate.duplicate, true);
+  const canonicalDuplicate = await materials.addMaterial('alice', {
+    kind: 'phrase',
+    title: 'BANK',
+    body: { article: 'de', en: 'The sofa' },
+  });
+  assert.equal(
+    canonicalDuplicate.id,
+    a.id,
+    'reader and Search share canonical noun and meaning matching',
+  );
+  const indexRoute = load('app/api/collection-index/route');
+  assert.equal((await indexRoute.GET(req('/api/collection-index', null, null))).status, 401);
+  const aliceIndex = await materials.listCollectionIndex('alice');
+  assert.equal(aliceIndex.find((row) => row.id === a.id).nl, 'de bank');
+  assert.deepEqual(Object.keys(aliceIndex[0]).sort(), ['en', 'id', 'lemma', 'nl']);
+  assert.equal((await materials.listCollectionIndex('bob')).length, 0);
+
   const sense2 = await materials.addMaterial('alice', {
     kind: 'phrase',
     title: 'de bank',
@@ -451,6 +468,11 @@ console.log(
   );
   assert.equal(r.status, 409);
   await materials.updateMaterial('alice', { id: a.id, version: 2, archived: true });
+  assert.equal(
+    (await materials.listCollectionIndex('alice')).some((row) => row.id === a.id),
+    false,
+    'archives are excluded from reader hints',
+  );
   assert.equal((await materials.listMaterials('alice')).length, 1);
   assert.equal((await materials.listMaterials('alice', '', true)).length, 1);
   assert.equal((await (await practice.GET(req('/api/practice'))).json()).items.length, 1);

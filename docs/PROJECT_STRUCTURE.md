@@ -298,3 +298,7 @@ Reading this guide or passing local checks does not establish that any particula
 The plain translation service loads owner-scoped Azure credentials once per request, reads independent settings concurrently and passes credentials directly to the adapter. It limits uncached plain requests to 120 per minute, with a separate 20-per-minute limit for uncached AI fallback. The lookup route uses Cloudflare `waitUntil` for nonessential cache writes and emits text-free `Server-Timing` durations for setup, provider and total time; those timings do not include browser-to-server transit or the typing debounce. Grammar calls retain their existing quotas and provider behavior.
 
 Search exposes current Azure translations as the first autocomplete option alongside dictionary completions. Up/Down navigates the accessible combobox, Enter selects the active option and Escape dismisses it. Selecting the Azure option reuses its result without another provider request. Suggestions from older input, context, language or account configuration are excluded.
+
+### Collection membership hints
+
+`lib/collection-index.ts` shares conservative form/meaning matching between the compact `/api/collection-index` projection and Search/Texts bookmark states. `app/components/use-collection-index.ts` refreshes the document-local index on mutations, focus and a visible-view interval. Reader underlines indicate saved forms, without inferring mastery or unseen inflections.

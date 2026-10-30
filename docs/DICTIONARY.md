@@ -78,3 +78,11 @@ Keep dataset licensing separate from the application's MIT source license:
 - WikDict derives from Wiktionary via DBnary and publishes its data under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Preserve attribution and share-alike notices for redistributed source-derived data, including generated JSON. See [WikDict's download/provenance documentation](https://www.wikdict.com/page/download).
 
 Every release manifest carries source notices; source records retain lexical-entry identifiers and glosses. Combining data or converting SQLite to JSON does not remove attribution or license obligations. Saved user meanings are not bulk rewritten during source updates.
+
+## Collection hints
+
+Search and the Texts word sheet use the same compact, authenticated collection index. A softly filled bookmark means that the exact Dutch form and English meaning are saved; it disables repeated saving. A small solid dot means another meaning is saved; an outlined dot means another form with the same known lemma is saved. Both remain available to add. Accessible labels and hover titles explain the icons without adding visible prose. These are collection membership hints, not claims of mastery.
+
+Reader words get a muted underline for an exact saved surface form. Matching ignores case, surrounding punctuation, repeated whitespace and Unicode composition. Saved nouns such as `de fiets` also underline `fiets`; different articles remain distinct for duplicate checking. A saved verb does not automatically underline its other inflections, and a saved phrase does not mark its individual words. Archived records, notes and text documents are excluded.
+
+The index contains only IDs, Dutch forms, English meanings and lemmas, without dictionary snapshots or learning histories. It is cached in document memory, invalidated by collection changes and refreshed on focus and every minute while the view is visible. Stale replies cannot overwrite a newer result. Browser saves and MCP saves use the shared server duplicate check; different meanings and forms remain separate records. There is no per-word network request for underlining.

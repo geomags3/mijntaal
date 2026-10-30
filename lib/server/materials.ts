@@ -1,3 +1,4 @@
+import { collectionFormKey, collectionMeaningKey, type CollectionWord } from '../collection-index';
 import { waitUntil } from 'cloudflare:workers';
 import { wordContent } from '../words';
 import { elevenSpeech } from './eleven-speech';
@@ -11,6 +12,21 @@ export const materialSchema = z.object({
   practice: z.boolean().optional(),
   practiceMode: z.enum(['words', 'sentences', 'off']).optional(),
 });
+/** Compact owner-scoped word index; excludes archives, notes and text bodies. */
+export async function listCollectionIndex(user: string): Promise<CollectionWord[]> {
+  const result = await db()
+    .prepare(
+      "SELECT id,title,json_extract(body,'$.article') AS article,json_extract(body,'$.en') AS en,json_extract(body,'$.lemma') AS lemma FROM materials WHERE owner=? AND kind='phrase' AND COALESCE(json_extract(body,'$._archived'),0)=0",
+    )
+    .bind(user)
+    .all();
+  return result.results.map((row) => ({
+    id: String(row.id),
+    nl: JSON.parse(wordContent({ title: row.title, body: { article: row.article } })).nl,
+    en: typeof row.en === 'string' ? row.en : '',
+    lemma: typeof row.lemma === 'string' ? row.lemma : '',
+  }));
+}
 export async function listMaterials(
   user: string,
   search = '',
@@ -98,12 +114,31 @@ export async function addMaterial(user: string, input: any) {
   if (b.practiceMode !== undefined || b.body.practiceMode !== undefined)
     checkPractice(mode, b.kind, b.body);
   else if (b.kind !== 'phrase' || typeof b.body.en !== 'string' || !b.body.en.trim()) mode = 'off';
-  const existing: any = await db()
-    .prepare(
-      "SELECT id,body FROM materials WHERE owner=? AND kind=? AND lower(trim(title))=lower(trim(?)) AND COALESCE(json_extract(body,'$.en'),'')=? AND COALESCE(json_extract(body,'$._archived'),0)=0 LIMIT 1",
-    )
-    .bind(user, b.kind, b.title, typeof b.body.en === 'string' ? b.body.en : '')
-    .first();
+  const saved =
+    b.kind === 'phrase'
+      ? (await listCollectionIndex(user)).find(
+          (row) =>
+            collectionFormKey(row.nl) === collectionFormKey(JSON.parse(wordContent(b)).nl) &&
+            collectionMeaningKey(row.en) ===
+              collectionMeaningKey(typeof b.body.en === 'string' ? b.body.en : ''),
+        )
+      : null;
+  const existing: any =
+    b.kind === 'phrase'
+      ? saved
+        ? await db()
+            .prepare(
+              "SELECT id,body FROM materials WHERE owner=? AND id=? AND kind='phrase' AND COALESCE(json_extract(body,'$._archived'),0)=0",
+            )
+            .bind(user, saved.id)
+            .first()
+        : null
+      : await db()
+          .prepare(
+            "SELECT id,body FROM materials WHERE owner=? AND kind=? AND lower(trim(title))=lower(trim(?)) AND COALESCE(json_extract(body,'$.en'),'')=? AND COALESCE(json_extract(body,'$._archived'),0)=0 LIMIT 1",
+          )
+          .bind(user, b.kind, b.title, typeof b.body.en === 'string' ? b.body.en : '')
+          .first();
   if (existing) {
     prepareMaterialAudio(user, { ...b, body: JSON.parse(existing.body) });
     return { id: existing.id, duplicate: true, version: JSON.parse(existing.body)._version || 0 };

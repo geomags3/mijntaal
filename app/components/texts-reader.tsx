@@ -1,4 +1,6 @@
 'use client';
+import { collectionBookmark, collectionDutch } from '../../lib/collection-index';
+import useCollectionIndex from './use-collection-index';
 import {
   AlertCircle,
   Archive,
@@ -943,6 +945,7 @@ export default function Texts({
       setSaving(false);
     }
   }
+  const collectionIndex = useCollectionIndex(visible);
   const baseLemma = word?.entry?.lemma || word?.nl || '';
   const hasBaseForm =
     !!word &&
@@ -957,9 +960,14 @@ export default function Texts({
             {sense.usage && <small>{sense.usage}</small>}
           </div>
           <button
-            className="icon-button"
-            disabled={saving}
-            aria-label={'Save meaning ' + (i + 1)}
+            {...collectionBookmark(
+              collectionIndex,
+              collectionDutch(word.nl, nounArticle(word.nl, word.entry)),
+              sense.meaning,
+              word.entry?.lemma || '',
+              'Save meaning ' + (i + 1),
+              saving,
+            )}
             onClick={() => saveMeaning(sense.meaning)}
           >
             <Bookmark size={18} />
@@ -1371,7 +1379,10 @@ export default function Texts({
                             w
                           ) : (
                             <button
-                              className="word"
+                              className={
+                                'word' + (collectionIndex.has(w) ? ' reader-saved-word' : '')
+                              }
+                              title={collectionIndex.has(w) ? 'Saved in collection' : undefined}
                               key={j}
                               onClick={() => {
                                 if (!window.getSelection()?.toString().trim())
@@ -1666,9 +1677,14 @@ export default function Texts({
                             {sense.usage && <small>{sense.usage}</small>}
                           </div>
                           <button
-                            className="icon-button"
-                            disabled={saving}
-                            aria-label={'Save explained meaning ' + (i + 1)}
+                            {...collectionBookmark(
+                              collectionIndex,
+                              collectionDutch(word.nl, nounArticle(word.nl, word.explanation)),
+                              sense.meaning,
+                              word.explanation?.lemma || '',
+                              'Save explained meaning ' + (i + 1),
+                              saving,
+                            )}
                             onClick={() => saveMeaning(sense.meaning, false, word.explanation)}
                           >
                             <Bookmark size={18} />

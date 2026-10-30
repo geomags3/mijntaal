@@ -90,6 +90,7 @@ export function dataChanged(path: string) {
       : path.startsWith('/api/texts')
         ? ['/api/texts', '/api/text-library', '/api/materials', '/api/sentences']
         : ['/api/materials', '/api/text-library', '/api/texts', '/api/words', '/api/sentences'];
+  prefixes.push('/api/collection-index');
   clientData.invalidate(prefixes);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('dutch-data-changed', { detail: prefixes }));

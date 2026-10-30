@@ -13,6 +13,10 @@
   --page: #fafaf7;
   --focus: #16445f;
   --highlight: #ffe2c9;
+  --saved-ink: #7c602a;
+  --saved-fill: #f1d99e;
+  --saved-marker: #b49a62;
+  --saved-underline: #b5b9ad;
   font-family:
     Inter,
     ui-sans-serif,
@@ -5032,4 +5036,39 @@ textarea::placeholder {
   .lesson-results {
     gap: 16px;
   }
+}
+
+/* Collection hints stay quieter than the Dutch text and active sentence. */
+.collection-bookmark {
+  position: relative;
+}
+.collection-bookmark[data-collection-state='saved'],
+.collection-bookmark[data-collection-state='saved']:disabled {
+  color: var(--saved-ink);
+  opacity: 1;
+}
+.collection-bookmark[data-collection-state='saved'] svg {
+  fill: var(--saved-fill);
+}
+.collection-bookmark[data-collection-state='meaning']::after,
+.collection-bookmark[data-collection-state='form']::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--saved-marker);
+}
+.collection-bookmark[data-collection-state='form']::after {
+  background: var(--page);
+  border: 1px solid var(--saved-marker);
+}
+.text-body .word.reader-saved-word {
+  text-decoration: underline;
+  text-decoration-color: var(--saved-underline);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-skip-ink: auto;
 }

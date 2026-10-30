@@ -89,6 +89,17 @@ vm.runInNewContext(
   {
     exports: ex,
     require(n) {
+      if (n.includes('use-collection-index'))
+        return { default: () => ({ has: () => false, status: () => 'new' }) };
+      if (n.endsWith('/collection-index'))
+        return {
+          collectionDutch: (title, article) => (article ? article + ' ' + title : title),
+          collectionBookmark: (index, nl, en, lemma, label, busy, className = 'icon-button') => ({
+            className,
+            'aria-label': label,
+            disabled: busy,
+          }),
+        };
       if (n === 'react') return hooks;
       if (n.endsWith('/practice-mode')) return modes;
       if (n.includes('client-data'))
